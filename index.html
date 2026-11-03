@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b57d0">
+<title>Canvas Coach · Setup</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1b1d21; --muted:#5d6470; --line:#e2e5ea; --accent:#0b57d0; --good:#137333; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111317; --card:#1b1e24; --ink:#e8eaed; --muted:#9aa0a6; --line:#2e333b; --accent:#8ab4f8; --good:#81c995; --bad:#f28b82; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 -apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:18px 16px 6px; max-width:760px; margin:auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  header p { margin:0; color:var(--muted); }
+  main { max-width:760px; margin:auto; padding:8px 12px 120px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin:12px 0; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  .hint { color:var(--muted); font-size:13px; margin:-4px 0 10px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:8px 0 3px; }
+  input, select, textarea { width:100%; font:inherit; color:inherit; background:transparent; border:1px solid var(--line); border-radius:8px; padding:8px; }
+  input[type=checkbox] { width:auto; margin-right:6px; }
+  textarea { min-height:160px; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0 10px; }
+  .row { display:grid; gap:6px; align-items:end; padding:8px 0; border-bottom:1px dashed var(--line); }
+  .row:last-child { border-bottom:0; }
+  .r-report { grid-template-columns:1.2fr .9fr 1.1fr .7fr; }
+  .r-date { grid-template-columns:1fr 2fr 1.4fr auto; }
+  .r-feed { grid-template-columns:1fr 2.2fr 1.2fr auto; }
+  .r-alias, .r-class { grid-template-columns:2fr 1fr auto; }
+  .r-class { grid-template-columns:1fr 1.3fr .9fr .9fr 1fr auto; }
+  @media (max-width:560px) { .r-report, .r-date, .r-feed, .r-alias, .r-class { grid-template-columns:1fr 1fr; } }
+  .check { display:flex; align-items:center; font-size:14px; color:var(--ink); margin:0; padding:8px 0; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  @media (prefers-color-scheme: dark) { button.primary { color:#0b1a33; } }
+  button.small { padding:4px 9px; font-size:13px; }
+  button.x { padding:6px 10px; justify-self:end; width:auto; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:10px 12px; }
+  .bar .in { max-width:760px; margin:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #status { font-size:13px; color:var(--muted); flex:1; min-width:160px; }
+  #status.ok { color:var(--good); } #status.err { color:var(--bad); }
+  .locked { opacity:.45; pointer-events:none; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Canvas Coach setup</h1>
+  <p>Edits <code>config.json</code> in your private <code>canvas-coach</code> repo. This page stores nothing on its own. Your Canvas token is not entered here; it lives in the repo's encrypted Actions secrets.</p>
+</header>
+<main>
+  <section id="connect">
+    <h2>1. Connect to your repo</h2>
+    <div class="grid">
+      <div><label>GitHub owner (your username)</label><input id="owner" placeholder="your-username" autocomplete="off"></div>
+      <div><label>Repo name</label><input id="repo" placeholder="canvas-coach" autocomplete="off"></div>
+    </div>
+    <label>GitHub fine-grained token (this repo only: Contents read/write, Actions read/write)</label>
+    <input id="ghtoken" type="password" placeholder="github_pat_…" autocomplete="off">
+    <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
+    <div class="actions"><button class="primary" id="load">Load settings</button>
+      <a id="reportsLink" href="#" target="_blank" rel="noopener" style="align-self:center">Open report page</a></div>
+  </section>
+
+  <div id="editor" class="locked">
+  <section>
+    <h2>2. Reports</h2>
+    <p class="hint">Times are in your time zone. Each enabled report is saved to the report page; tick Email to also send it.</p>
+    <div id="reports"></div>
+    <label>Time zone</label><input id="timezone" placeholder="America/Detroit">
+  </section>
+
+  <section>
+    <h2>3. Email</h2>
+    <label class="check"><input type="checkbox" id="emailEnabled"> Send emails</label>
+    <label>Send to (comma-separated)</label><input id="emailTo" placeholder="you@gmail.com, parent@example.com">
+    <p class="hint" style="margin-top:6px">Sending uses the SMTP_USER and SMTP_PASS secrets (a Gmail address + app password).</p>
+  </section>
+
+  <section>
+    <h2>4. Alerts</h2>
+    <div class="grid" id="alerts"></div>
+  </section>
+
+  <section>
+    <h2>5. Courses</h2>
+    <label>Ignore courses whose name contains (comma-separated)</label><input id="ignore">
+    <label>Short names</label><p class="hint">Full Canvas course name → what reports call it.</p>
+    <div id="aliases"></div>
+    <div class="actions"><button class="small" data-add="alias">+ Short name</button></div>
+  </section>
+
+  <section>
+    <h2>6. Study time</h2>
+    <label class="check"><input type="checkbox" id="awOn"> Find free time automatically from my class schedule (recommended)</label>
+    <div class="grid">
+      <div><label>Day starts</label><input id="awStart" type="time"></div>
+      <div><label>Day ends</label><input id="awEnd" type="time"></div>
+      <div><label>Buffer around classes (min)</label><input id="awBuf" type="number"></div>
+      <div><label>Meals / no-study times</label><input id="awMeals" placeholder="12:00-12:30, 17:45-18:45"></div>
+      <div><label>Saturday span</label><input id="aw_sat" placeholder="10:00-17:00"></div>
+      <div><label>Sunday span</label><input id="aw_sun" placeholder="12:00-21:00"></div>
+    </div>
+    <p class="hint" style="margin-top:10px">Manual windows (used only when the automatic option is off), e.g. <code>15:00-17:00, 19:00-21:30</code>.</p>
+    <div class="grid" id="windows"></div>
+    <label style="margin-top:14px">Class schedule (blocks study time during class; ticked classes also get pre- and post-study blocks)</label>
+    <div id="classes"></div>
+    <div class="actions"><button class="small" data-add="class">+ Class</button></div>
+  </section>
+
+  <section>
+    <h2>7. Important dates</h2>
+    <p class="hint">Registration, bus tickets, drop deadlines, anything. You get reminders 14, 7, 3, 1 and 0 days before (or the days you list).</p>
+    <div id="dates"></div>
+    <div class="actions">
+      <button class="small" data-add="date">+ Date</button>
+      <button class="small" data-preset="Spring registration opens (your time ticket)">+ Registration</button>
+      <button class="small" data-preset="Break bus tickets go on sale">+ Bus tickets</button>
+      <button class="small" data-preset="Last day to drop with a W">+ W deadline</button>
+      <button class="small" data-preset="Last day of classes">+ Last day of classes</button>
+      <button class="small" data-preset="Final exams begin">+ Finals</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>8. Calendar feeds (optional)</h2>
+    <p class="hint">Any .ics link, like a campus events calendar. Keywords filter it (e.g. <code>registration, bus, break</code>).</p>
+    <div id="feeds"></div>
+    <div class="actions"><button class="small" data-add="feed">+ Feed</button></div>
+  </section>
+
+  <section>
+    <h2>9. Advanced</h2>
+    <p class="hint">The full config as JSON. Edits here win when you save.</p>
+    <label class="check"><input type="checkbox" id="useRaw"> Save from this box instead of the form</label>
+    <textarea id="raw" spellcheck="false"></textarea>
+  </section>
+  </div>
+</main>
+
+<div class="bar"><div class="in">
+  <span id="status">Enter your repo and token, then Load.</span>
+  <select id="runKind" style="width:auto"><option value="morning">morning</option><option value="night">night</option><option value="weekly">weekly</option><option value="lookahead">next 7 days</option><option value="all">all</option></select>
+  <button id="run">Run now</button>
+  <button class="primary" id="save">Save</button>
+</div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const API = 'https://api.github.com';
+const REPORTS = [['morning','Morning'],['night','Night'],['weekly','Weekly review'],['lookahead','Next 7 days']];
+const DAYS = ['daily','sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+const WD = ['mon','tue','wed','thu','fri','sat','sun'];
+const ALERTS = [['concern_score','Concern below (%)'],['failing_score','Failing below (%)'],['category_alert','Category alert below (%)'],
+  ['trend_drop','Alert on 7-day drop (points)'],['low_item_pct','Low score on one item (%)'],['due_soon_hours','"Due soon" window (hours)'],
+  ['exam_warn_days','Warn about exams (days ahead)'],['late_ask_window_days','Suggest late-work emails for items missed within (days)']];
+let cfg = null, sha = null, branch = 'main';
+
+function status(msg, cls) { const s = $('#status'); s.textContent = msg; s.className = cls || ''; }
+function el(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; }
+function esc(v) { return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+const b64e = s => btoa(unescape(encodeURIComponent(s)));
+const b64d = s => decodeURIComponent(escape(atob(s.replace(/\n/g,''))));
+
+function gh(path, opts = {}) {
+  return fetch(API + path, { ...opts, headers: { 'Accept':'application/vnd.github+json', 'Authorization':'Bearer ' + $('#ghtoken').value.trim(),
+    'X-GitHub-Api-Version':'2022-11-28', ...(opts.body ? {'Content-Type':'application/json'} : {}) } })
+    .then(async r => { if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(`${r.status} ${j.message || r.statusText}`); } return r.status === 204 ? null : r.json(); });
+}
+const repoPath = () => `/repos/${encodeURIComponent($('#owner').value.trim())}/${encodeURIComponent($('#repo').value.trim())}`;
+
+// ---------- persistence of connection fields ----------
+$('#owner').value = 'codeted323'; $('#repo').value = 'canvas-coach';   // defaults for this hosted copy
+try {
+  const saved = JSON.parse(localStorage.getItem('canvasCoachConn') || '{}');
+  if (saved.owner) $('#owner').value = saved.owner;
+  if (saved.repo) $('#repo').value = saved.repo;
+  if (saved.token) { $('#ghtoken').value = saved.token; $('#remember').checked = true; }
+} catch (e) {}
+function rememberConn() {
+  try {
+    const d = { owner: $('#owner').value.trim(), repo: $('#repo').value.trim() };
+    if ($('#remember').checked) d.token = $('#ghtoken').value.trim();
+    localStorage.setItem('canvasCoachConn', JSON.stringify(d));
+  } catch (e) {}
+}
+function updateLinks() {
+  const o = $('#owner').value.trim(), r = $('#repo').value.trim();
+  $('#reportsLink').href = o && r ? `https://github.com/${o}/${r}/tree/${branch}/reports` : '#';
+}
+['#owner','#repo'].forEach(s => $(s).addEventListener('input', updateLinks));
+updateLinks();
+
+// ---------- rows ----------
+const ROWS = {
+  alias: (v = {}) => el(`<div class="row r-alias"><div><label>Canvas course name</label><input data-k="full" value="${esc(v.full)}"></div>
+     <div><label>Short name</label><input data-k="short" value="${esc(v.short)}"></div><button class="x" data-del>✕</button></div>`),
+  class: (v = {}) => el(`<div class="row r-class"><div><label>Course</label><input data-k="course" value="${esc(v.course)}" placeholder="MA2160"></div>
+     <div><label>Days</label><input data-k="days" value="${esc((v.days || []).join(', '))}" placeholder="mon, wed, fri"></div>
+     <div><label>Start</label><input data-k="start" type="time" value="${esc(v.start || v.time)}"></div>
+     <div><label>End</label><input data-k="end" type="time" value="${esc(v.end)}"></div>
+     <label class="check"><input type="checkbox" data-k="prepost" ${v.prepost !== false ? 'checked' : ''}> Pre/post study</label>
+     <button class="x" data-del>✕</button></div>`),
+  date: (v = {}) => el(`<div class="row r-date"><div><label>Date</label><input data-k="date" type="date" value="${esc(v.date)}"></div>
+     <div><label>What</label><input data-k="title" value="${esc(v.title)}"></div>
+     <div><label>Note / remind days</label><input data-k="note" value="${esc(v.note)}" placeholder="note"><input data-k="remind" value="${esc((v.remind || []).join(', '))}" placeholder="14, 7, 1, 0" style="margin-top:4px"></div>
+     <button class="x" data-del>✕</button></div>`),
+  feed: (v = {}) => el(`<div class="row r-feed"><div><label>Name</label><input data-k="name" value="${esc(v.name)}"></div>
+     <div><label>.ics URL</label><input data-k="url" value="${esc(v.url)}" placeholder="https://…/calendar.ics"></div>
+     <div><label>Keywords</label><input data-k="keywords" value="${esc((v.keywords || []).join(', '))}"></div><button class="x" data-del>✕</button></div>`),
+};
+const LISTS = { alias:'#aliases', class:'#classes', date:'#dates', feed:'#feeds' };
+function addRow(kind, v) { $(LISTS[kind]).appendChild(ROWS[kind](v)); }
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.del !== undefined) { t.closest('.row').remove(); }
+  if (t.dataset.add) { addRow(t.dataset.add); }
+  if (t.dataset.preset) { addRow('date', { title: t.dataset.preset }); $('#dates').lastChild.querySelector('[data-k=date]').focus(); }
+});
+const list = s => s.split(',').map(x => x.trim()).filter(Boolean);
+function readRows(kind) {
+  return [...$(LISTS[kind]).children].map(r => Object.fromEntries([...r.querySelectorAll('[data-k]')].map(i => [i.dataset.k, i.type === 'checkbox' ? i.checked : i.value.trim()])));
+}
+
+// ---------- form <-> config ----------
+function fill(c) {
+  $('#reports').innerHTML = '';
+  for (const [k, label] of REPORTS) {
+    const r = (c.reports || {})[k] || {};
+    $('#reports').appendChild(el(`<div class="row r-report" data-report="${k}">
+      <label class="check"><input type="checkbox" data-k="enabled" ${r.enabled !== false ? 'checked' : ''}> ${label}</label>
+      <div><label>Time</label><input type="time" data-k="time" value="${esc(r.time || '07:00')}"></div>
+      <div><label>Day</label><select data-k="day">${DAYS.map(d => `<option ${((r.day || 'daily').toLowerCase() === d) ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
+      <label class="check"><input type="checkbox" data-k="email" ${r.email !== false ? 'checked' : ''}> Email</label></div>`));
+  }
+  $('#timezone').value = c.timezone || 'America/Detroit';
+  const em = c.email || {};
+  $('#emailEnabled').checked = em.enabled !== false;
+  $('#emailTo').value = (em.to || []).join(', ');
+  $('#alerts').innerHTML = ALERTS.map(([k, l]) => `<div><label>${l}</label><input type="number" data-alert="${k}" value="${esc((c.alerts || {})[k])}"></div>`).join('');
+  const co = c.courses || {};
+  $('#ignore').value = (co.ignore || []).join(', ');
+  $('#aliases').innerHTML = ''; Object.entries(co.aliases || {}).forEach(([full, short]) => addRow('alias', { full, short }));
+  const st = c.study || {};
+  $('#windows').innerHTML = WD.map(d => `<div><label>${d}</label><input data-win="${d}" value="${esc((st.windows || {})[d])}"></div>`).join('');
+  $('#classes').innerHTML = ''; (st.classes || []).forEach(v => addRow('class', v));
+  const aw = st.auto_windows || {};
+  $('#awOn').checked = !!aw.enabled; $('#awStart').value = aw.day_start || '08:30'; $('#awEnd').value = aw.day_end || '21:30';
+  $('#awBuf').value = aw.buffer_minutes ?? 10; $('#awMeals').value = (aw.meals || []).join(', ');
+  $('#aw_sat').value = (aw.days || {}).sat || ''; $('#aw_sun').value = (aw.days || {}).sun || '';
+  $('#dates').innerHTML = ''; (c.dates || []).forEach(v => addRow('date', v));
+  $('#feeds').innerHTML = ''; (c.ics_feeds || []).forEach(v => addRow('feed', v));
+  $('#raw').value = JSON.stringify(c, null, 2);
+}
+
+function collect() {
+  if ($('#useRaw').checked) return JSON.parse($('#raw').value);
+  const c = JSON.parse(JSON.stringify(cfg));
+  c.reports = c.reports || {};
+  document.querySelectorAll('[data-report]').forEach(row => {
+    const k = row.dataset.report, g = s => row.querySelector(`[data-k=${s}]`);
+    c.reports[k] = { ...(c.reports[k] || {}), enabled: g('enabled').checked, time: g('time').value || '07:00', day: g('day').value, email: g('email').checked };
+  });
+  c.timezone = $('#timezone').value.trim() || 'America/Detroit';
+  c.email = { ...(c.email || {}), enabled: $('#emailEnabled').checked, to: list($('#emailTo').value) };
+  c.alerts = c.alerts || {};
+  document.querySelectorAll('[data-alert]').forEach(i => { if (i.value !== '') c.alerts[i.dataset.alert] = Number(i.value); });
+  c.courses = { ...(c.courses || {}), ignore: list($('#ignore').value),
+    aliases: Object.fromEntries(readRows('alias').filter(r => r.full && r.short).map(r => [r.full, r.short])) };
+  c.study = c.study || {}; c.study.windows = c.study.windows || {};
+  document.querySelectorAll('[data-win]').forEach(i => c.study.windows[i.dataset.win] = i.value.trim());
+  c.study.classes = readRows('class').filter(r => r.course).map(r => ({ course: r.course, days: list(r.days.toLowerCase()), start: r.start, end: r.end, prepost: r.prepost }));
+  const aw = c.study.auto_windows = { ...(c.study.auto_windows || {}) };
+  aw.enabled = $('#awOn').checked; aw.day_start = $('#awStart').value || '08:30'; aw.day_end = $('#awEnd').value || '21:30';
+  aw.buffer_minutes = Number($('#awBuf').value || 10); aw.meals = list($('#awMeals').value);
+  aw.days = { ...(aw.days || {}) }; ['sat','sun'].forEach(d => { const v = $('#aw_' + d).value.trim(); if (v) aw.days[d] = v; else delete aw.days[d]; });
+  c.dates = readRows('date').filter(r => r.title).map(r => {
+    const o = { date: r.date, title: r.title }; if (r.note) o.note = r.note;
+    const rem = list(r.remind).map(Number).filter(n => !isNaN(n)); if (rem.length) o.remind = rem; return o; });
+  c.ics_feeds = readRows('feed').filter(r => r.url).map(r => ({ name: r.name || 'calendar', url: r.url, keywords: list(r.keywords) }));
+  return c;
+}
+
+// ---------- actions ----------
+$('#load').onclick = async () => {
+  try {
+    status('Loading…'); rememberConn();
+    const repo = await gh(repoPath()); branch = repo.default_branch || 'main';
+    if (!repo.private) status('Warning: this repo is PUBLIC. Make it private before saving grades here.', 'err');
+    const f = await gh(repoPath() + '/contents/config.json?ref=' + encodeURIComponent(branch));
+    sha = f.sha; cfg = JSON.parse(b64d(f.content));
+    fill(cfg); $('#editor').classList.remove('locked'); updateLinks();
+    if (repo.private) status('Loaded. Make changes, then Save.', 'ok');
+  } catch (e) { status('Load failed: ' + e.message, 'err'); }
+};
+$('#raw').addEventListener('input', () => { $('#useRaw').checked = true; });
+$('#save').onclick = async () => {
+  if (!cfg) return status('Load settings first.', 'err');
+  let c;
+  try { c = collect(); } catch (e) { return status('Advanced JSON is not valid: ' + e.message, 'err'); }
+  try {
+    status('Saving…');
+    const res = await gh(repoPath() + '/contents/config.json', { method:'PUT', body: JSON.stringify({
+      message: 'Update settings from setup page', content: b64e(JSON.stringify(c, null, 2) + '\n'), sha, branch }) });
+    sha = res.content.sha; cfg = c; fill(cfg); $('#useRaw').checked = false;
+    status('Saved. The next scheduled run uses these settings.', 'ok');
+  } catch (e) { status('Save failed: ' + e.message + (e.message.startsWith('409') ? ' (changed elsewhere; Load again)' : ''), 'err'); }
+};
+$('#run').onclick = async () => {
+  try {
+    status('Starting run…'); rememberConn();
+    await gh(repoPath() + '/actions/workflows/coach.yml/dispatches', { method:'POST', body: JSON.stringify({ ref: branch, inputs: { report: $('#runKind').value } }) });
+    status('Run started. The report appears on the report page in about a minute.', 'ok');
+  } catch (e) { status('Run failed: ' + e.message, 'err'); }
+};
+</script>
+</body>
+</html>
