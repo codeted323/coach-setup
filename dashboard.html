@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Canvas Coach · Performance</title>
+<style>
+.viz-root{color-scheme:light;
+  --surface-0:#f4f4f1;--surface-1:#fcfcfb;--line:#e3e2dd;--grid:#ecebe6;--axis:#b9b8b1;
+  --text-primary:#0b0b0b;--text-secondary:#52514e;--text-muted:#7a7974;
+  --accent:#2a78d6;--accent-soft:#86b6ef;--accent-wash:rgba(42,120,214,.10);--muted-mark:#a3a29b;
+  --good:#0ca30c;--warning:#fab219;--serious:#ec835a;--critical:#d03b3b;--good-ink:#006300;--crit-ink:#b22a2a;--warn-ink:#8a5a00}
+@media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;
+  --surface-0:#121211;--surface-1:#1a1a19;--line:#2e2e2b;--grid:#262624;--axis:#55554f;
+  --text-primary:#f0efec;--text-secondary:#c3c2b7;--text-muted:#8f8e86;
+  --accent:#3987e5;--accent-soft:#5598e7;--accent-wash:rgba(57,135,229,.16);--muted-mark:#6d6c66;
+  --good-ink:#5fd35f;--crit-ink:#ff8a8a;--warn-ink:#fab219}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);font:14px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1120px;margin:auto;padding:14px 14px 60px}
+header h1{font-size:20px;margin:4px 0 2px}
+header p{margin:0;color:var(--text-secondary);font-size:13px}
+.bar{position:sticky;top:0;z-index:5;background:var(--surface-0);padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{border:1px solid var(--line);background:var(--surface-1);color:var(--text-primary);border-radius:999px;padding:6px 11px;font:inherit;font-size:13px;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.step{border:1px solid var(--line);background:var(--surface-1);color:var(--text-primary);border-radius:8px;padding:5px 10px;font:inherit;cursor:pointer}
+.step:disabled{opacity:.35;cursor:default}
+select,input[type=date]{font:inherit;font-size:13px;color:var(--text-primary);background:var(--surface-1);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.winlabel{font-weight:600;margin:6px 2px 0;font-size:14px}
+.muted{color:var(--text-secondary)} .small{font-size:12px}
+section{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+section h2{font-size:15px;margin:0 0 2px}
+section .sub{color:var(--text-secondary);font-size:12.5px;margin:0 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi .k{font-size:12px;color:var(--text-secondary)}
+.kpi .v{font-size:26px;font-weight:650;letter-spacing:-.5px;margin:2px 0}
+.kpi .d{font-size:12px;color:var(--text-secondary)}
+.up{color:var(--good-ink)} .down{color:var(--crit-ink)}
+.status{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.status i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.mini{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.mini .t{display:flex;justify-content:space-between;align-items:baseline;font-size:13px}
+.mini .t b{font-size:14px}
+svg text{font-family:inherit}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-secondary);margin:6px 0 2px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--text-secondary);font-weight:600;font-size:12px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+details summary{cursor:pointer;color:var(--accent);font-size:13px;margin-top:8px}
+.todo li{margin:4px 0} .todo{padding-left:18px;margin:4px 0 8px}
+.day{font-weight:600;margin-top:8px;font-size:13px}
+#tip{position:fixed;pointer-events:none;background:var(--text-primary);color:var(--surface-1);font-size:12px;padding:6px 8px;border-radius:6px;max-width:260px;z-index:20;display:none;line-height:1.35}
+.basis{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;margin-bottom:8px}
+.note{font-size:12px;color:var(--text-muted);margin-top:8px}
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+<header>
+  <h1>Performance dashboard</h1>
+  <p id="asof"></p>
+</header>
+
+<div class="bar">
+  <div class="row" id="presets" role="group" aria-label="Time window"></div>
+  <div class="row" style="margin-top:6px">
+    <button class="step" id="back" aria-label="Previous window">◀ Earlier</button>
+    <button class="step" id="fwd" aria-label="Next window">Later ▶</button>
+    <span id="customBox" class="row" style="display:none">
+      <input type="date" id="cStart" aria-label="Custom start"> to <input type="date" id="cEnd" aria-label="Custom end">
+    </span>
+    <select id="course" aria-label="Course filter"><option value="all">All courses</option></select>
+  </div>
+  <div class="winlabel" id="winlabel"></div>
+</div>
+
+<section>
+  <h2>In this window</h2>
+  <p class="sub">Work that was due in the window, and scores that came back in it. Arrows compare with the window just before.</p>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section>
+  <h2 id="fcTitle">Semester forecast</h2>
+  <p class="sub" id="fcSub"></p>
+  <div class="basis" role="group" aria-label="Scenario">Scenario:
+    <button class="chip" data-scen="pace" aria-pressed="true">If nothing changes</button>
+    <button class="chip" data-scen="push" aria-pressed="false">Turn everything in (~85%)</button>
+    <button class="chip" data-scen="best" aria-pressed="false">Best effort</button>
+  </div>
+  <div class="basis" id="basisRow">Your pace, measured over:
+    <button class="chip" data-basis="semester" aria-pressed="true">the whole semester</button>
+    <button class="chip" data-basis="window" aria-pressed="false">the selected window</button>
+  </div>
+  <div id="fcChart"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--accent-wash);border:1px solid var(--accent-soft)"></span>likely range (10th–90th percentile)</span>
+    <span><span class="sw" style="background:var(--accent);border-radius:50%"></span>most likely final</span>
+    <span><svg width="14" height="12"><line x1="7" y1="0" x2="7" y2="12" stroke="var(--text-primary)" stroke-width="2"/></svg>your goal</span>
+    <span><svg width="14" height="12"><line x1="7" y1="0" x2="7" y2="12" stroke="var(--crit-ink)" stroke-width="1.5" stroke-dasharray="3 2"/></svg>passing line (D)</span>
+  </div>
+  <details><summary>Show as a table</summary><div id="fcTable"></div></details>
+  <p class="note">"If nothing changes" is a warning, not a verdict: it shows where your current habits lead. The other two scenarios show what changing them buys you. "Needs X% on the rest" means the average you'd need on every remaining assignment and exam, with everything turned in, to reach your goal letter. Simulates the rest of the semester thousands of times using your turn-in rate and scores, each course's category weights and syllabus cutoffs, and MA2160's final-replaces-lowest-midterm rule. It also applies each syllabus's drop-lowest rules and CH1150's 350-point XP cap. It can't know about late-work deals, curves or extra credit, so treat it as a guide, not a promise.</p>
+</section>
+
+<section>
+  <h2>Grade trend</h2>
+  <p class="sub">Each course's running grade, rebuilt from when scores were posted. The shaded band is the selected window; the dashed line is your goal.</p>
+  <div class="grid2" id="trends"></div>
+</section>
+
+<section>
+  <h2>Turning work in, week by week</h2>
+  <p class="sub">Every assignment by the week it was due. Highlighted weeks overlap the selected window.</p>
+  <div id="weekly"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--accent)"></span>on time</span>
+    <span><span class="sw" style="background:var(--accent-soft)"></span>late</span>
+    <span><span class="sw" style="background:var(--muted-mark)"></span>awaiting a grade</span>
+    <span><span class="sw" style="background:var(--critical)"></span>missing / graded zero</span>
+  </div>
+</section>
+
+<section>
+  <h2>Scores as they came back</h2>
+  <p class="sub">Each graded item, by the date it was graded. Exams and quizzes are blue; everything else is gray.</p>
+  <div id="scores"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--accent);border-radius:50%"></span>exam / quiz</span>
+    <span><span class="sw" style="background:var(--muted-mark);border-radius:50%"></span>homework, labs, other</span>
+  </div>
+</section>
+
+<section>
+  <h2>Next 7 days</h2>
+  <p class="sub">Still open, by due date.</p>
+  <div id="todo"></div>
+</section>
+
+<section id="attSec">
+  <h2>Attendance and participation</h2>
+  <p class="sub">iClicker and attendance grades over time.</p>
+  <div class="grid2" id="att"></div>
+</section>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+let D = /*__DATA__*/null;
+let NOW, SEM_START, CLASSES_END, items, courses, courseById, state;
+function boot() {
+NOW = new Date(D.generated);
+const DAY = 864e5;
+const EXAMISH = /exam|midterm|test|proctored/i;
+const LETTERS = ["A","AB","B","BC","C","CD","D"];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const dayStart = d => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const addDays = (d, n) => { const x = dayStart(d); x.setDate(x.getDate() + n); return x; };   // calendar days, DST-safe
+const endOf = d => new Date(addDays(d, 1).getTime() - 1);
+const TZ = undefined;   // dates follow the viewer's device time zone, same as the day boundaries
+const fmtD = d => d.toLocaleDateString(undefined, {month:"short", day:"numeric", timeZone:TZ});
+const fmtDW = d => d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric", timeZone:TZ});
+const fmtT = d => d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit", timeZone:TZ});
+const pctTxt = v => v == null || isNaN(v) ? "—" : `${Math.round(v)}%`;
+SEM_START = D.semester.start ? new Date(D.semester.start + "T00:00:00") : addDays(NOW, -70);
+CLASSES_END = D.semester.classes_end ? new Date(D.semester.classes_end + "T23:59:00") : addDays(NOW, 40);
+
+// ---------------- data prep ----------------
+items = D.items.map(i => ({...i,
+  due: i.due ? new Date(i.due) : null,
+  sub: i.sub ? new Date(i.sub) : null,
+  grd: i.grd ? new Date(i.grd) : (i.s != null ? (i.due && new Date(i.due) <= NOW ? new Date(i.due) : NOW) : null)}));
+courses = D.courses.filter(c => items.some(i => i.c === c.id));
+courseById = Object.fromEntries(courses.map(c => [c.id, c]));
+function statusOf(i) {
+  if (!i.due || i.due > NOW) return "upcoming";
+  if (i.miss || (i.s === 0 && !i.sub && !i.done)) return "missing";
+  if (i.done && i.late) return "late";
+  if (i.done || i.s > 0) return "ontime";
+  return "pending";          // past due, no score, not flagged missing (e.g. turned in on paper)
+}
+const counted = i => ["ontime", "late", "missing"].includes(statusOf(i));
+function letterFor(pct, scale) {
+  for (const L of LETTERS) if (scale[L] != null && pct >= scale[L]) return L;
+  return "F";
+}
+
+// ---------------- window state ----------------
+const PRESETS = [["today","Today"],["3d","Last 3 days"],["7d","Last 7 days"],["lastweek","Last week"],
+                 ["30d","Last 30 days"],["lastmonth","Last month"],["semester","Semester"],["custom","Custom"]];
+state = {preset:"7d", offset:0, basis:"semester", scen:"pace", course:"all",
+  cStart: addDays(NOW, -14), cEnd: dayStart(NOW)};
+try { Object.assign(state, JSON.parse(localStorage.getItem("ccDash") || "{}"));
+  state.cStart = new Date(state.cStart); state.cEnd = new Date(state.cEnd); state.offset = 0; } catch (e) {}
+function save() { try { localStorage.setItem("ccDash", JSON.stringify({preset:state.preset, basis:state.basis, scen:state.scen, course:state.course, cStart:state.cStart, cEnd:state.cEnd})); } catch (e) {} }
+
+function windowRange() {
+  const t = dayStart(NOW), o = state.offset;
+  let s, e;
+  const roll = n => { s = addDays(t, -n - (n + 1) * o); e = o ? endOf(addDays(t, -(n + 1) * o)) : NOW; };
+  switch (state.preset) {
+    case "today": s = addDays(t, -o); e = o ? endOf(s) : NOW; break;
+    case "3d": roll(3); break;
+    case "7d": roll(7); break;
+    case "30d": roll(30); break;
+    case "lastweek": { const dow = (t.getDay() + 6) % 7; s = addDays(t, -dow - 7 * (1 + o)); e = new Date(addDays(s, 7).getTime() - 1); break; }
+    case "lastmonth": { s = new Date(t.getFullYear(), t.getMonth() - 1 - o, 1); e = new Date(new Date(t.getFullYear(), t.getMonth() - o, 1).getTime() - 1); break; }
+    case "semester": s = SEM_START; e = NOW; break;
+    case "custom": s = dayStart(state.cStart); e = endOf(state.cEnd); break;
+  }
+  if (e > NOW) e = NOW;
+  return {s, e};
+}
+function prevRange(r) { const len = r.e - r.s; return {s: new Date(r.s.getTime() - len - 1), e: new Date(r.s.getTime() - 1)}; }
+const inR = (d, r) => d && d >= r.s && d <= r.e;
+const pick = arr => state.course === "all" ? arr : arr.filter(i => i.c === state.course);
+
+// ---------------- KPIs ----------------
+function stats(r) {
+  const due = pick(items).filter(i => i.p > 0 && inR(i.due, r) && i.due <= NOW && counted(i));
+  const on = due.filter(i => statusOf(i) === "ontime").length, late = due.filter(i => statusOf(i) === "late").length;
+  const miss = due.length - on - late;
+  const graded = pick(items).filter(i => i.p > 0 && i.s != null && inR(i.grd, r));
+  const avg = graded.length ? 100 * graded.reduce((a, i) => a + i.s / i.p, 0) / graded.length : null;
+  const ex = graded.filter(i => i.exam);
+  const exAvg = ex.length ? 100 * ex.reduce((a, i) => a + i.s / i.p, 0) / ex.length : null;
+  return {n: due.length, on, late, miss, done: due.length ? 100 * (on + late) / due.length : null,
+          ontime: due.length ? 100 * on / due.length : null, avg, nGraded: graded.length, exAvg, nEx: ex.length};
+}
+function deltaTxt(cur, prev, goodUp = true, unit = " pts") {
+  if (cur == null || prev == null) return `<span class="d">no earlier data</span>`;
+  const d = cur - prev; if (Math.abs(d) < 0.5) return `<span class="d">same as before</span>`;
+  const good = (d > 0) === goodUp;
+  return `<span class="d ${good ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(Math.round(d))}${unit} vs previous</span>`;
+}
+function renderKPIs(r) {
+  const a = stats(r), b = stats(prevRange(r));
+  const tile = (k, v, d, tipTxt) => `<div class="kpi" data-tip="${esc(tipTxt)}"><div class="k">${k}</div><div class="v">${v}</div>${d}</div>`;
+  $("#kpis").innerHTML = [
+    tile("Turned in", pctTxt(a.done), a.n ? `<div class="d">${a.on + a.late} of ${a.n} due</div>` + deltaTxt(a.done, b.done) : `<div class="d">nothing was due</div>`, "Share of assignments due in this window that you submitted, on time or late."),
+    tile("On time", pctTxt(a.ontime), deltaTxt(a.ontime, b.ontime), "Submitted before the deadline."),
+    tile("Missing", a.n ? String(a.miss) : "—", `<div class="d">${a.late} late</div>` + deltaTxt(a.miss, b.miss, false, ""), "Due in the window and flagged missing or graded zero. Work still waiting for a grade isn't counted."),
+    tile("Average score", pctTxt(a.avg), `<div class="d">${a.nGraded} graded</div>` + deltaTxt(a.avg, b.avg), "Average % on everything graded in this window."),
+    tile("Exams & quizzes", pctTxt(a.exAvg), `<div class="d">${a.nEx} graded</div>` + deltaTxt(a.exAvg, b.exAvg), "Average % on exams, mini-exams and proctored quizzes graded in this window."),
+  ].join("");
+}
+
+// ---------------- running grade ----------------
+function groupsOf(c) { return c.weighted ? Object.entries(c.groups).filter(([, w]) => w > 0) : [["_all", 100]]; }
+const inGroup = (c, i, g) => c.weighted ? i.g === g : true;
+function gradeAt(c, t) {
+  let num = 0, den = 0;
+  for (const [g, w] of groupsOf(c)) {
+    let e = 0, p = 0;
+    for (const i of items) if (i.c === c.id && inGroup(c, i, g) && i.s != null && i.p > 0 && i.grd && i.grd <= t) { e += i.s; p += i.p; }
+    if (p > 0) { num += w * e / p; den += w; }
+  }
+  return den ? 100 * num / den : null;
+}
+const trendCache = {};
+function trendSeries(c) {
+  if (trendCache[c.id]) return trendCache[c.id];
+  const out = [];
+  for (let d = dayStart(SEM_START); d <= NOW; d = addDays(d, 1)) {
+    const t = new Date(Math.min(endOf(d).getTime(), NOW.getTime()));
+    const v = gradeAt(c, t); if (v != null) out.push([t, v]);
+  }
+  return trendCache[c.id] = out;
+}
+
+// ---------------- forecast (Monte Carlo) ----------------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function normal(r) { let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const clip = x => x < 0 ? 0 : x > 1 ? 1 : x;
+function mean(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; }
+function sd(a) { const m = mean(a); return a.length > 1 ? Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / (a.length - 1)) : null; }
+
+function rates(c, basisRange) {
+  const isDone = i => statusOf(i) !== "missing";
+  const mine = items.filter(i => i.c === c.id && i.p > 0 && !i.exam && i.due && i.due <= NOW && counted(i));
+  const all = items.filter(i => i.p > 0 && !i.exam && i.due && i.due <= NOW && counted(i));
+  const semDone = mine.length ? mine.filter(isDone).length / mine.length : (all.length ? all.filter(isDone).length / all.length : .75);
+  const semScores = mine.filter(i => isDone(i) && i.s != null).map(i => i.s / i.p);
+  const semMean = mean(semScores) ?? .8;
+  const win = basisRange ? mine.filter(i => inR(i.due, basisRange)) : mine;
+  const K = 6;   // a short window is blended with your semester average, weighted like 6 extra assignments
+  const pDone = (win.filter(isDone).length + K * semDone) / (win.length + K);
+  const ws = win.filter(i => isDone(i) && i.s != null).map(i => i.s / i.p);
+  const m = ((mean(ws) ?? semMean) * ws.length + K * semMean) / (ws.length + K);
+  const s = Math.max(.08, sd(ws) ?? sd(semScores) ?? .15);
+  const ex = items.filter(i => i.c === c.id && i.exam && i.s != null && i.p > 0).map(i => i.s / i.p);
+  const em = mean(ex) ?? (c.score != null ? c.score / 100 : .7);
+  return {pDone, m, s, em, es: Math.max(.08, sd(ex) ?? .12), nWin: win.length};
+}
+
+function courseModel(c) {
+  const daysLeft = Math.max(0, (CLASSES_END - NOW) / DAY), daysGone = Math.max(1, (NOW - SEM_START) / DAY);
+  const frac = daysLeft / daysGone;
+  return groupsOf(c).map(([g, w]) => {
+    const gi = items.filter(i => i.c === c.id && inGroup(c, i, g) && i.p > 0);
+    let earned = 0, possible = 0, pastPts = 0; const rem = [], fixed = [], fixedItems = [];
+    for (const i of gi) {
+      if (i.s != null) { earned += i.s; possible += i.p; pastPts += i.p; fixed.push(i.s / i.p); fixedItems.push({x: i.s / i.p, p: i.p}); }
+      else if (statusOf(i) === "missing") { possible += i.p; pastPts += i.p; fixed.push(0); fixedItems.push({x: 0, p: i.p}); }
+      else { rem.push({p: i.p, exam: i.exam}); if (i.due && i.due < NOW) pastPts += i.p; }
+    }
+    const examGroup = EXAMISH.test(g);
+    if (!gi.length) rem.push({p: 100, exam: examGroup});
+    else if (!examGroup) {
+      const remPts = rem.reduce((a, x) => a + x.p, 0), target = pastPts * frac;
+      const avgP = pastPts / Math.max(1, gi.length - rem.length);
+      for (let k = 0, n = Math.round(Math.max(0, target - remPts) / Math.max(1, avgP)); k < n; k++) rem.push({p: avgP, exam: false});
+    }
+    const fc = c.forecast || {};
+    return {g, w, earned, possible, rem, fixed, fixedItems, examGroup,
+            drop: (fc.drops || {})[g] || 0, cap: (fc.caps || {})[g] || 0};
+  });
+}
+
+// Category % after the syllabus's drop-lowest and point-cap rules. list = [{x: 0..1, p: points}]
+function groupPct(G, list) {
+  let L = list;
+  if (G.drop && L.length > G.drop) L = L.slice().sort((a, b) => a.x - b.x).slice(G.drop);
+  let e = 0, p = 0; for (const it of L) { e += it.x * it.p; p += it.p; }
+  if (G.cap) return p > 0 ? Math.min(e, G.cap) / G.cap : null;
+  return p > 0 ? e / p : null;
+}
+
+// Scenario: null = your pace; otherwise fixed turn-in and score levels for the rest of the term.
+const SCENARIOS = {
+  pace: {label: "If nothing changes", over: null},
+  push: {label: "Turn everything in (~85%)", over: {pDone: 1, m: .85, s: .08}},
+  best: {label: "Best effort", over: {pDone: 1, m: .97, s: .04, em: .92, es: .05}},
+};
+function simulate(c, basisRange, labSims, over) {
+  const R = {...rates(c, basisRange), ...(over || {})}, model = courseModel(c), N = D.runs || 2000, r = rng(1234 + c.id.length * 97);
+  const fc = c.forecast || {}, rep = fc.replace_lowest;
+  const out = new Float64Array(N);
+  for (let k = 0; k < N; k++) {
+    let num = 0, den = 0, mid = null, fin = null;
+    for (const G of model) {
+      if (fc.lab_group && G.g === fc.lab_group && labSims) { num += G.w * labSims[k] / 100; den += G.w; continue; }
+      const scores = rep && G.g === rep.group ? G.fixed.slice() : null, list = G.fixedItems.slice();
+      for (const it of G.rem) {
+        const x = it.exam || G.examGroup ? clip(R.em + R.es * normal(r)) : (r() < R.pDone ? clip(R.m + R.s * normal(r)) : 0);
+        list.push({x, p: it.p}); if (scores) scores.push(x);
+      }
+      const gp = groupPct(G, list);
+      if (gp == null) continue;
+      if (scores) { mid = {G, scores}; }
+      if (rep && G.g === rep.with) fin = gp;
+      num += G.w * gp; den += G.w;
+    }
+    if (mid && fin != null && mid.scores.length) {            // final replaces lowest midterm if higher
+      const lo = Math.min(...mid.scores);
+      if (fin > lo) { const n = mid.scores.length, old = mean(mid.scores), nw = old + (fin - lo) / n; num += mid.G.w * (nw - old); }
+    }
+    out[k] = den ? 100 * num / den : NaN;
+  }
+  const v = Array.from(out).filter(x => !isNaN(x)).sort((a, b) => a - b);
+  const q = f => v[Math.min(v.length - 1, Math.floor(f * v.length))];
+  const goal = c.goal ? c.scale[c.goal] : null, passAt = c.scale.D ?? 60;
+  return {sims: out, p10: q(.1), p50: q(.5), p90: q(.9),
+          pGoal: goal == null ? null : v.filter(x => x >= goal).length / v.length,
+          pFail: v.filter(x => x < passAt).length / v.length, goal, passAt, rates: R};
+}
+
+// Deterministic: final % if every remaining item scores x (0..1) and is turned in.
+function finalAt(c, x, labX) {
+  const fc = c.forecast || {}, rep = fc.replace_lowest;
+  let num = 0, den = 0, mid = null, fin = null;
+  for (const G of courseModel(c)) {
+    if (fc.lab_group && G.g === fc.lab_group && labX != null) { num += G.w * labX / 100; den += G.w; continue; }
+    const gp = groupPct(G, G.fixedItems.concat(G.rem.map(it => ({x, p: it.p}))));
+    if (gp == null) continue;
+    if (rep && G.g === rep.group) mid = {G, scores: G.fixed.concat(G.rem.map(() => x))};
+    if (rep && G.g === rep.with) fin = gp;
+    num += G.w * gp; den += G.w;
+  }
+  if (mid && fin != null && mid.scores.length) { const lo = Math.min(...mid.scores); if (fin > lo) num += mid.G.w * (fin - lo) / mid.scores.length; }
+  return den ? 100 * num / den : NaN;
+}
+function needed(c, target) {
+  const fc = c.forecast || {}, lab = fc.lab_course && courseById[fc.lab_course];
+  const f = x => finalAt(c, x, lab ? finalAt(lab, x) : null);
+  if (target == null || isNaN(f(1))) return null;
+  if (f(0) >= target) return 0;
+  if (f(1) < target) return Infinity;
+  let lo = 0, hi = 1; for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; f(m) >= target ? hi = m : lo = m; }
+  return 100 * hi;
+}
+const needTxt = n => n == null ? "" : n === Infinity ? "goal out of reach" : n === 0 ? "goal already locked in" : `needs ${Math.ceil(n)}% on the rest`;
+
+function forecastAll(basisRange, over) {
+  const res = {};
+  const lab = courses.find(c => courses.some(o => (o.forecast || {}).lab_course === c.id));
+  if (lab) res[lab.id] = simulate(lab, basisRange, null, over);
+  for (const c of courses) {
+    if (res[c.id]) continue;
+    const fc = c.forecast || {};
+    res[c.id] = simulate(c, basisRange, fc.lab_course && res[fc.lab_course] ? res[fc.lab_course].sims : null, over);
+  }
+  return res;
+}
+function statusChip(p) {
+  if (p == null) return `<span class="status muted">no goal</span>`;
+  const [label, col] = p >= .7 ? ["On track", "var(--good)"] : p >= .4 ? ["At risk", "var(--warning)"] : ["Unlikely", "var(--critical)"];
+  return `<span class="status"><i style="background:${col}"></i>${label}</span>`;
+}
+
+// ---------------- chart helpers ----------------
+const W = () => Math.min(1060, document.querySelector(".wrap").clientWidth - 30);
+function svg(w, h, body, label) { return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="${esc(label)}">${body}</svg>`; }
+
+function renderForecast(r) {
+  const basisRange = state.basis === "window" ? r : null;
+  const sc = SCENARIOS[state.scen] || SCENARIOS.pace;
+  const res = forecastAll(basisRange, sc.over);
+  const list = courses.filter(c => c.score != null && res[c.id] && !isNaN(res[c.id].p50) && (state.course === "all" || c.id === state.course))
+    .sort((a, b) => (res[a.id].pGoal ?? 2) - (res[b.id].pGoal ?? 2));
+  const atRisk = list.filter(c => res[c.id].pGoal != null && res[c.id].pGoal < .7).length;
+  const failing = list.filter(c => res[c.id].pFail >= .25).length;
+  const lead = {pace: "If nothing changes", push: "If you turn everything in at about 85%", best: "With your best effort"}[state.scen] || "If nothing changes";
+  $("#fcTitle").textContent = `${lead}: ` + (atRisk ? `${atRisk} of ${list.length} courses at risk of missing your goal` : "on track in every course");
+  const basisTxt = state.basis === "window" ? "how you did in the selected window, blended with your semester average" : "your whole semester so far";
+  $("#fcSub").textContent = (failing ? `${failing} course${failing > 1 ? "s have" : " has"} a 25%+ chance of finishing below passing. ` : "No course has a big risk of failing. ") +
+    (state.scen === "pace" ? `Assumes you keep turning work in and scoring like ${basisTxt}.` :
+     state.scen === "push" ? "Assumes every remaining assignment is turned in at about 85%, and exams go like your exams so far." :
+     "Assumes every remaining assignment is turned in at about 97%, and exams at about 92%.");
+  $("#basisRow").style.display = state.scen === "pace" ? "" : "none";
+  for (const c of list) res[c.id].need = needed(c, res[c.id].goal);
+  const w = W(), narrow = w < 560;
+  const lab = narrow ? 8 : Math.min(110, w * .22), right = narrow ? 8 : Math.min(200, w * .36);
+  const x0 = narrow ? 8 : lab + 8, x1 = w - right - 8, rh = narrow ? 62 : 40, top = 22;
+  const x = v => x0 + (x1 - x0) * v / 100;
+  let b = "";
+  for (const t of [0, 20, 40, 60, 80, 100]) b += `<line x1="${x(t)}" x2="${x(t)}" y1="${top - 6}" y2="${top + rh * list.length}" stroke="var(--grid)"/><text x="${x(t)}" y="12" font-size="11" text-anchor="middle" fill="var(--text-muted)">${t}%</text>`;
+  list.forEach((c, k) => {
+    const F = res[c.id], y = top + k * rh + (narrow ? 42 : rh / 2);
+    const tipT = `${c.id}: most likely ${F.p50.toFixed(0)}% (${letterFor(F.p50, c.scale)}), range ${F.p10.toFixed(0)}–${F.p90.toFixed(0)}%. Goal ${c.goal ?? "none"}: ${F.pGoal == null ? "—" : Math.round(F.pGoal * 100) + "% chance"}. Chance of finishing below passing: ${Math.round(F.pFail * 100)}%. To reach the goal: ${needTxt(F.need) || "—"} (turning everything in).`;
+    const goalTxt = F.pGoal == null ? "no goal set" : `${Math.round(F.pGoal * 100)}% chance of ${c.goal}`;
+    const failSpan = F.pGoal == null ? (c.id === "Calc Lab" ? "counts as 10% of MA2160" : "likely " + F.p50.toFixed(0) + "%")
+      : `<tspan fill="${F.pFail >= .25 ? "var(--crit-ink)" : "var(--text-secondary)"}">fail ${Math.round(F.pFail * 100)}%</tspan> · ${needTxt(F.need).replace(" on the rest", "")}`;
+    if (narrow) {
+      b += `<text x="${x0}" y="${y - 22}" font-size="13" fill="var(--text-primary)"><tspan font-weight="600">${esc(c.id)}</tspan>  ${goalTxt}</text>`;
+      b += `<text x="${x1}" y="${y - 22}" font-size="11.5" text-anchor="end" fill="var(--text-secondary)">${failSpan}</text>`;
+    } else {
+      b += `<text x="${lab}" y="${y + 4}" font-size="13" text-anchor="end" fill="var(--text-primary)">${esc(c.id)}</text>`;
+      b += `<text x="${x1 + 12}" y="${y - 2}" font-size="12.5" fill="var(--text-primary)" font-weight="600">${goalTxt}</text>`;
+      b += `<text x="${x1 + 12}" y="${y + 13}" font-size="11.5" fill="var(--text-secondary)">${failSpan}</text>`;
+    }
+    b += `<g data-tip="${esc(tipT)}"><rect x="${x0}" y="${y - 14}" width="${x1 - x0}" height="28" fill="transparent"/>`;
+    b += `<rect x="${x(F.p10)}" y="${y - 7}" width="${Math.max(3, x(F.p90) - x(F.p10))}" height="14" rx="4" fill="var(--accent-wash)" stroke="var(--accent-soft)"/>`;
+    b += `<line x1="${x(F.passAt)}" x2="${x(F.passAt)}" y1="${y - 12}" y2="${y + 12}" stroke="var(--crit-ink)" stroke-width="1.5" stroke-dasharray="3 2"/>`;
+    if (F.goal != null) b += `<line x1="${x(F.goal)}" x2="${x(F.goal)}" y1="${y - 12}" y2="${y + 12}" stroke="var(--text-primary)" stroke-width="2"/>`;
+    b += `<circle cx="${x(F.p50)}" cy="${y}" r="5.5" fill="var(--accent)" stroke="var(--surface-1)" stroke-width="2"/></g>`;
+  });
+  $("#fcChart").innerHTML = svg(w, top + rh * list.length + 6, b, "Forecast of final grades by course");
+  $("#fcTable").innerHTML = `<table><thead><tr><th>Course</th><th>Goal</th><th>Status</th><th class="num">Chance of goal</th><th class="num">Fail risk</th><th class="num">Likely final</th><th class="num">Range</th><th>To reach goal</th><th class="num">Turn-in rate used</th></tr></thead><tbody>` +
+    list.map(c => { const F = res[c.id]; return `<tr><td>${esc(c.id)}</td><td>${c.goal ?? "—"}</td><td>${statusChip(F.pGoal)}</td><td class="num">${F.pGoal == null ? "—" : Math.round(F.pGoal * 100) + "%"}</td><td class="num">${Math.round(F.pFail * 100)}%</td><td class="num">${F.p50.toFixed(0)}% ${letterFor(F.p50, c.scale)}</td><td class="num">${F.p10.toFixed(0)}–${F.p90.toFixed(0)}%</td><td>${needTxt(F.need)}</td><td class="num">${Math.round(F.rates.pDone * 100)}%</td></tr>`; }).join("") + `</tbody></table>`;
+  return res;
+}
+
+function renderTrends(r, res) {
+  const list = courses.filter(c => state.course === "all" || c.id === state.course);
+  const w = 300, h = 120, l = 30, rr = 8, t = 8, bt = 20;
+  const xs = d => l + (w - l - rr) * (d - SEM_START) / Math.max(DAY, NOW - SEM_START);
+  const ys = v => t + (h - t - bt) * (1 - v / 100);
+  $("#trends").innerHTML = list.map(c => {
+    const S = trendSeries(c); if (!S.length) return "";
+    const cur = S[S.length - 1][1], goal = c.goal ? c.scale[c.goal] : null;
+    let b = "";
+    for (const g of [0, 50, 100]) b += `<line x1="${l}" x2="${w - rr}" y1="${ys(g)}" y2="${ys(g)}" stroke="var(--grid)"/><text x="${l - 4}" y="${ys(g) + 3}" font-size="9" text-anchor="end" fill="var(--text-muted)">${g}</text>`;
+    const ws = Math.max(r.s, SEM_START);
+    if (r.e > SEM_START) b += `<rect x="${xs(ws)}" y="${t}" width="${Math.max(2, xs(r.e) - xs(ws))}" height="${h - t - bt}" fill="var(--accent-wash)"/>`;
+    if (goal != null) b += `<line x1="${l}" x2="${w - rr}" y1="${ys(goal)}" y2="${ys(goal)}" stroke="var(--text-secondary)" stroke-dasharray="4 3"/><text x="${w - rr}" y="${ys(goal) - 3}" font-size="9" text-anchor="end" fill="var(--text-secondary)">goal ${c.goal}</text>`;
+    b += `<path d="${S.map(([d, v], k) => (k ? "L" : "M") + xs(d).toFixed(1) + " " + ys(v).toFixed(1)).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+    const step = Math.max(1, Math.floor(S.length / 40));
+    S.forEach(([d, v], k) => { if (k % step === 0 || k === S.length - 1) b += `<rect x="${xs(d) - 4}" y="${t}" width="8" height="${h - t - bt}" fill="transparent" data-tip="${esc(`${c.id} · ${fmtD(d)}: ${v.toFixed(1)}%`)}"/>`; });
+    b += `<circle cx="${xs(S[S.length - 1][0])}" cy="${ys(cur)}" r="4" fill="var(--accent)" stroke="var(--surface-1)" stroke-width="2"/>`;
+    b += `<text x="${l}" y="${h - 5}" font-size="9" fill="var(--text-muted)">${fmtD(SEM_START)}</text><text x="${w - rr}" y="${h - 5}" font-size="9" text-anchor="end" fill="var(--text-muted)">today</text>`;
+    const F = res[c.id];
+    const foot = c.score == null ? "Not enough grade data in Canvas to forecast." : (F && F.pGoal != null ? statusChip(F.pGoal) + " " : "") + (F ? `likely final ${F.p50.toFixed(0)}%${F.need != null ? " · " + needTxt(F.need) : ""}` : "");
+    return `<div class="mini"><div class="t"><span>${esc(c.id)}</span><b>${cur.toFixed(1)}% ${letterFor(cur, c.scale)}</b></div>${svg(w, h, b, c.id + " grade trend")}<div class="small muted">${foot}</div></div>`;
+  }).join("");
+}
+
+function weekStart(d) { const x = dayStart(d); return addDays(x, -((x.getDay() + 6) % 7)); }
+function renderWeekly(r) {
+  const weeks = [];
+  for (let s = weekStart(SEM_START); s <= NOW; s = addDays(s, 7)) weeks.push(s);
+  const data = weeks.map(s => {
+    const e = new Date(addDays(s, 7).getTime() - 1);
+    const due = pick(items).filter(i => i.p > 0 && i.due && i.due >= s && i.due <= e && i.due <= NOW);
+    const cnt = st => due.filter(i => statusOf(i) === st).length;
+    const on = cnt("ontime"), late = cnt("late"), miss = cnt("missing"), pend = cnt("pending");
+    return {s, e, on, late, miss, pend, n: due.length, hot: e >= r.s && s <= r.e};
+  });
+  const w = W(), h = 200, l = 30, t = 10, bt = 24, max = Math.max(4, ...data.map(d => d.n));
+  const bw = (w - l - 8) / data.length, y = v => t + (h - t - bt) * (1 - v / max);
+  let b = "";
+  for (const g of [0, Math.round(max / 2), max]) b += `<line x1="${l}" x2="${w - 8}" y1="${y(g)}" y2="${y(g)}" stroke="var(--grid)"/><text x="${l - 4}" y="${y(g) + 3}" font-size="10" text-anchor="end" fill="var(--text-muted)">${g}</text>`;
+  data.forEach((d, k) => {
+    const x = l + k * bw + 3, ww = Math.max(4, bw - 6), op = d.hot ? 1 : .45;
+    let base = h - bt;
+    const seg = (n, col, label) => { if (!n) return ""; const hh = (h - t - bt) * n / max, yy = base - hh; base = yy - 2;
+      return `<rect x="${x}" y="${yy}" width="${ww}" height="${Math.max(1, hh - 0)}" rx="2" fill="${col}" opacity="${op}" data-tip="${esc(`Week of ${fmtD(d.s)}: ${n} ${label} (of ${d.n} due)`)}"/>`; };
+    b += seg(d.on, "var(--accent)", "on time") + seg(d.late, "var(--accent-soft)", "late") + seg(d.pend, "var(--muted-mark)", "awaiting a grade") + seg(d.miss, "var(--critical)", "missing");
+    if (k % Math.ceil(data.length / 8) === 0) b += `<text x="${x + ww / 2}" y="${h - 8}" font-size="10" text-anchor="middle" fill="var(--text-muted)">${fmtD(d.s)}</text>`;
+  });
+  $("#weekly").innerHTML = svg(w, h, b, "Assignments due per week by status");
+}
+
+function renderScores(r) {
+  const g = pick(items).filter(i => i.p > 0 && i.s != null && i.grd);
+  const w = W(), h = 220, l = 34, t = 10, bt = 24;
+  const xs = d => l + (w - l - 10) * (d - SEM_START) / Math.max(DAY, NOW - SEM_START), ys = v => t + (h - t - bt) * (1 - v / 100);
+  let b = "";
+  for (const v of [0, 25, 50, 75, 100]) b += `<line x1="${l}" x2="${w - 10}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--grid)"/><text x="${l - 4}" y="${ys(v) + 3}" font-size="10" text-anchor="end" fill="var(--text-muted)">${v}%</text>`;
+  const ws = Math.max(r.s, SEM_START);
+  b += `<rect x="${xs(ws)}" y="${t}" width="${Math.max(2, xs(r.e) - xs(ws))}" height="${h - t - bt}" fill="var(--accent-wash)"/>`;
+  for (const i of g.filter(i => !i.exam)) b += `<circle cx="${xs(i.grd)}" cy="${ys(100 * i.s / i.p)}" r="3.5" fill="var(--muted-mark)" opacity=".75" data-tip="${esc(`${i.c} · ${i.n}: ${i.s}/${i.p} (${Math.round(100 * i.s / i.p)}%) · ${fmtD(i.grd)}`)}"/>`;
+  for (const i of g.filter(i => i.exam)) b += `<circle cx="${xs(i.grd)}" cy="${ys(100 * i.s / i.p)}" r="6" fill="var(--accent)" stroke="var(--surface-1)" stroke-width="2" data-tip="${esc(`${i.c} · ${i.n}: ${i.s}/${i.p} (${Math.round(100 * i.s / i.p)}%) · ${fmtD(i.grd)}`)}"/>`;
+  for (let d = weekStart(SEM_START), k = 0; d <= NOW; d = addDays(d, 14), k++) b += `<text x="${xs(d)}" y="${h - 8}" font-size="10" text-anchor="middle" fill="var(--text-muted)">${fmtD(d)}</text>`;
+  $("#scores").innerHTML = svg(w, h, b, "Scores over time");
+}
+
+function renderTodo() {
+  const end = addDays(NOW, 8);
+  const open = pick(items).filter(i => i.due && i.due > NOW && i.due < end && !i.done && i.s == null).sort((a, b) => a.due - b.due);
+  if (!open.length) { $("#todo").innerHTML = `<p class="muted">Nothing open in the next 7 days.</p>`; return; }
+  const by = {};
+  for (const i of open) (by[dayStart(i.due).getTime()] ||= []).push(i);
+  $("#todo").innerHTML = Object.entries(by).map(([k, arr]) => `<div class="day">${fmtDW(new Date(+k))}</div><ul class="todo">` +
+    arr.map(i => `<li><b>${esc(i.c)}</b> ${esc(i.n)} <span class="muted small">· ${fmtT(i.due)}${i.exam ? " · exam" : ""} · ${i.p} pts</span></li>`).join("") + `</ul>`).join("");
+}
+
+function renderAttendance(r) {
+  const rows = (D.attendance || []).filter(a => state.course === "all" || a.course === state.course);
+  $("#attSec").style.display = rows.length ? "" : "none";
+  const w = 300, h = 90, l = 28, t = 8, bt = 16;
+  $("#att").innerHTML = rows.map(a => {
+    const S = a.series.map(([d, v]) => [new Date(d + "T12:00:00"), v]);
+    const x0 = Math.min(SEM_START, S[0] ? S[0][0] : SEM_START);
+    const xs = d => l + (w - l - 8) * (d - x0) / Math.max(DAY, NOW - x0), ys = v => t + (h - t - bt) * (1 - v / 100);
+    let b = `<line x1="${l}" x2="${w - 8}" y1="${ys(75)}" y2="${ys(75)}" stroke="var(--text-secondary)" stroke-dasharray="4 3"/><text x="${w - 8}" y="${ys(75) - 3}" font-size="9" text-anchor="end" fill="var(--text-secondary)">75%</text>`;
+    for (const g of [0, 100]) b += `<text x="${l - 4}" y="${ys(g) + 3}" font-size="9" text-anchor="end" fill="var(--text-muted)">${g}</text>`;
+    if (S.length > 1) b += `<path d="${S.map(([d, v], k) => (k ? "L" : "M") + xs(d).toFixed(1) + " " + ys(v).toFixed(1)).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+    S.forEach(([d, v]) => b += `<circle cx="${xs(d)}" cy="${ys(v)}" r="3.5" fill="var(--accent)" data-tip="${esc(`${a.course} ${a.label} · ${fmtD(d)}: ${v}%`)}"/>`);
+    return `<div class="mini"><div class="t"><span>${esc(a.course)} · ${esc(a.label)}</span><b>${a.pct.toFixed(0)}%</b></div>${svg(w, h, b, a.course + " " + a.label)}</div>`;
+  }).join("");
+}
+
+// ---------------- controls ----------------
+function render() {
+  save();
+  document.querySelectorAll("#presets .chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.p === state.preset)));
+  document.querySelectorAll("[data-basis]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.basis === state.basis)));
+  document.querySelectorAll("[data-scen]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.scen === state.scen)));
+  $("#customBox").style.display = state.preset === "custom" ? "" : "none";
+  const fixed = ["semester", "custom"].includes(state.preset);
+  $("#back").disabled = fixed; $("#fwd").disabled = fixed || state.offset === 0;
+  const r = windowRange();
+  const same = dayStart(r.s).getTime() === dayStart(r.e).getTime();
+  $("#winlabel").textContent = (same ? fmtDW(r.s) : `${fmtDW(r.s)} – ${fmtDW(r.e)}`) + (state.offset ? `  (${state.offset} back)` : "");
+  renderKPIs(r);
+  const res = renderForecast(r);
+  renderTrends(r, res); renderWeekly(r); renderScores(r); renderTodo(); renderAttendance(r);
+}
+$("#asof").textContent = `Data as of ${NOW.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit", timeZone:TZ})}. Updates with each coach report.`;
+$("#presets").innerHTML = PRESETS.map(([k, l]) => `<button class="chip" data-p="${k}">${l}</button>`).join("");
+$("#presets").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (!b) return; state.preset = b.dataset.p; state.offset = 0; render(); });
+document.querySelectorAll("[data-basis]").forEach(b => b.onclick = () => { state.basis = b.dataset.basis; render(); });
+document.querySelectorAll("[data-scen]").forEach(b => b.onclick = () => { state.scen = b.dataset.scen; render(); });
+$("#back").onclick = () => { state.offset++; render(); };
+$("#fwd").onclick = () => { state.offset = Math.max(0, state.offset - 1); render(); };
+const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+$("#cStart").value = iso(state.cStart); $("#cEnd").value = iso(state.cEnd);
+$("#cStart").onchange = e => { state.cStart = new Date(e.target.value + "T00:00:00"); render(); };
+$("#cEnd").onchange = e => { state.cEnd = new Date(e.target.value + "T00:00:00"); render(); };
+$("#course").innerHTML += courses.map(c => `<option value="${esc(c.id)}">${esc(c.id)}</option>`).join("");
+$("#course").value = courseById[state.course] ? state.course : "all";
+$("#course").onchange = e => { state.course = e.target.value; render(); };
+const tip = $("#tip");
+function showTip(e) { const el = e.target.closest("[data-tip]"); if (!el) { tip.style.display = "none"; return; }
+  tip.textContent = el.dataset.tip; tip.style.display = "block";
+  const p = e.touches ? e.touches[0] : e; const x = Math.min(window.innerWidth - 270, p.clientX + 12); tip.style.left = Math.max(6, x) + "px"; tip.style.top = (p.clientY + 14) + "px"; }
+document.addEventListener("mousemove", showTip); document.addEventListener("touchstart", showTip, {passive:true});
+document.addEventListener("scroll", () => tip.style.display = "none", {passive:true});
+let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+render();
+}
+
+// ---------------- loading (hosted copy: data comes from the private repo) ----------------
+async function loadFromGitHub(owner, repo, token) {
+  const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/state/dashboard.json`,
+    {headers: {"Accept": "application/vnd.github.raw+json", "Authorization": "Bearer " + token, "X-GitHub-Api-Version": "2022-11-28"}});
+  if (!r.ok) throw new Error(r.status === 404 ? "No dashboard data yet. Run the coach once (Actions, Run workflow, type dashboard)." :
+                             r.status === 401 ? "GitHub rejected the token. It may have expired." : `GitHub said ${r.status}.`);
+  return r.json();
+}
+function showLogin(msg) {
+  document.querySelector(".wrap").style.display = "none";
+  let box = document.getElementById("login");
+  if (!box) { box = document.createElement("div"); box.id = "login"; box.className = "wrap"; document.body.prepend(box); }
+  box.innerHTML = `<header><h1>Performance dashboard</h1><p>Your grades stay in your private repo. This page loads them with your GitHub token, which is the same one the setup page uses.</p></header>
+  <section style="max-width:520px"><h2>Unlock</h2>
+  <label class="small muted">GitHub owner</label><input id="gO" style="width:100%;margin:2px 0 8px;padding:8px;font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--surface-1);color:var(--text-primary)">
+  <label class="small muted">Repo</label><input id="gR" style="width:100%;margin:2px 0 8px;padding:8px;font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--surface-1);color:var(--text-primary)">
+  <label class="small muted">Fine-grained token (Contents: read on canvas-coach is enough)</label><input id="gT" type="password" style="width:100%;margin:2px 0 8px;padding:8px;font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--surface-1);color:var(--text-primary)">
+  <label class="small"><input type="checkbox" id="gM"> Remember on this device</label>
+  <div style="margin-top:10px"><button class="chip" id="gGo" aria-pressed="true">Load my dashboard</button></div>
+  <p class="small" id="gMsg" style="color:var(--crit-ink)">${msg || ""}</p></section>`;
+  let c = {}; try { c = JSON.parse(localStorage.getItem("canvasCoachConn") || "{}"); } catch (e) {}
+  document.getElementById("gO").value = c.owner || "codeted323"; document.getElementById("gR").value = c.repo || "canvas-coach";
+  document.getElementById("gT").value = c.token || ""; document.getElementById("gM").checked = !!c.token;
+  document.getElementById("gGo").onclick = async () => {
+    const o = gO.value.trim(), rp = gR.value.trim(), t = gT.value.trim();
+    try { localStorage.setItem("canvasCoachConn", JSON.stringify(gM.checked ? {owner: o, repo: rp, token: t} : {owner: o, repo: rp})); } catch (e) {}
+    gMsg.textContent = "Loading…";
+    try { D = await loadFromGitHub(o, rp, t); box.remove(); document.querySelector(".wrap").style.display = ""; boot(); }
+    catch (e) { gMsg.textContent = e.message; }
+  };
+}
+(async () => {
+  if (D) { boot(); return; }
+  let c = {}; try { c = JSON.parse(localStorage.getItem("canvasCoachConn") || "{}"); } catch (e) {}
+  if (!c.token) { showLogin(); return; }
+  try {
+    D = await loadFromGitHub(c.owner || "codeted323", c.repo || "canvas-coach", c.token);
+    boot();
+  } catch (e) { showLogin(e.message); }
+})();
+</script>
+</body>
+</html>
