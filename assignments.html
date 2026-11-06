@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<!-- This page has its own light and dark themes; ask Dark Reader not to repaint it. -->
+<meta name="darkreader-lock">
+<title>Assignments · Canvas Coach</title>
+<style>
+:root{
+  --bg:#f6f6f3;--card:#ffffff;--ink:#141413;--ink2:#4f4e4a;--ink3:#7a7974;--line:#e4e3de;--zebra:#fafaf8;--hover:#f0efea;
+  --accent:#1f6fd1;--accent-ink:#ffffff;--focus:#1f6fd1;
+  /* status: text color + soft fill. Each status also has its own symbol, so color is never the only cue. */
+  --due-fg:#1d5fb3;--due-bg:#e7f0fb;
+  --ok-fg:#18692b;--ok-bg:#e5f4e8;
+  --late-fg:#8a5300;--late-bg:#fdf1dc;
+  --miss-fg:#b02a2a;--miss-bg:#fbe7e6;
+  --exc-fg:#5d5c57;--exc-bg:#efeeea;
+  --unk-fg:#5d4a9e;--unk-bg:#efebfa;
+}
+@media (prefers-color-scheme: dark){ html[data-theme="auto"]{
+  --bg:#121212;--card:#1b1b1a;--ink:#ecebe6;--ink2:#bdbcb5;--ink3:#8d8c85;--line:#2e2e2b;--zebra:#1f1f1e;--hover:#262624;
+  --accent:#5b9cf0;--accent-ink:#0b1626;--focus:#7fb1f3;
+  --due-fg:#8dbdf5;--due-bg:#1a2b40;--ok-fg:#7fd18f;--ok-bg:#16301d;--late-fg:#f2c26b;--late-bg:#3a2c12;
+  --miss-fg:#ff9a94;--miss-bg:#3d1b1a;--exc-fg:#b3b2ab;--exc-bg:#2a2a28;--unk-fg:#b9a8f2;--unk-bg:#2a2540;}}
+html[data-theme="dark"]{
+  --bg:#121212;--card:#1b1b1a;--ink:#ecebe6;--ink2:#bdbcb5;--ink3:#8d8c85;--line:#2e2e2b;--zebra:#1f1f1e;--hover:#262624;
+  --accent:#5b9cf0;--accent-ink:#0b1626;--focus:#7fb1f3;
+  --due-fg:#8dbdf5;--due-bg:#1a2b40;--ok-fg:#7fd18f;--ok-bg:#16301d;--late-fg:#f2c26b;--late-bg:#3a2c12;
+  --miss-fg:#ff9a94;--miss-bg:#3d1b1a;--exc-fg:#b3b2ab;--exc-bg:#2a2a28;--unk-fg:#b9a8f2;--unk-bg:#2a2540;color-scheme:dark}
+html[data-theme="light"]{color-scheme:light}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:var(--ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1180px;margin:auto;padding:12px 12px 80px}
+.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;justify-content:space-between}
+h1{font-size:20px;margin:4px 0}
+.asof{color:var(--ink2);font-size:13px}
+.nav{font-size:13px;display:flex;gap:12px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+.presets,.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;line-height:1.2}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.preset{font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.row label{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:2px}
+select,input[type=search],input[type=date]{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:14px;min-height:34px}
+input[type=search]{min-width:180px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;min-height:34px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.summary{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:10px 2px 6px;font-size:14px}
+.summary b{font-size:15px}
+.legend{font-size:12px;color:var(--ink3)}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:650;padding:2px 8px;border-radius:999px;white-space:nowrap;line-height:1.35}
+.badge .sym{font-size:12px;width:12px;text-align:center}
+.s-due{color:var(--due-fg);background:var(--due-bg)} .s-ok{color:var(--ok-fg);background:var(--ok-bg)}
+.s-late{color:var(--late-fg);background:var(--late-bg)} .s-miss{color:var(--miss-fg);background:var(--miss-bg)}
+.s-exc{color:var(--exc-fg);background:var(--exc-bg)} .s-unk{color:var(--unk-fg);background:var(--unk-bg)}
+/* table */
+table{border-collapse:separate;border-spacing:0;width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:7px 7px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);font-size:14px}
+tbody tr:nth-child(even) td{background:var(--zebra)}
+tbody tr:last-child td{border-bottom:0}
+th{font-size:12px;color:var(--ink2);font-weight:650;background:var(--card);position:sticky;top:0;z-index:1;white-space:nowrap;user-select:none}
+th button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+th button:focus-visible{outline:2px solid var(--focus)}
+th .arrow{color:var(--accent);font-size:11px;min-width:9px}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.when{white-space:nowrap;font-variant-numeric:tabular-nums}
+.when .day{font-weight:600}
+.when .time{color:var(--ink3);font-size:12.5px;margin-left:4px}
+.na{color:var(--ink3)}
+.cls{font-weight:650;white-space:nowrap}
+.name a{color:var(--ink);text-decoration:none}
+.name a:hover{text-decoration:underline}
+.sub{color:var(--ink3);font-size:12.5px}
+.lateby{color:var(--late-fg);font-size:12.5px;font-weight:600}
+td.notes{border-left:1px dashed var(--line)}
+.empty{padding:28px;text-align:center;color:var(--ink2)}
+/* phone list */
+.list{display:none;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.item{padding:9px 11px;border-bottom:1px solid var(--line)}
+.item:nth-child(even){background:var(--zebra)}
+.item:last-child{border-bottom:0}
+.l1{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.l1 .name{flex:1 1 100%;margin-top:3px;font-size:15px;line-height:1.3}
+.l2{display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:4px;font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.l2 b{color:var(--ink);font-weight:600}
+.markup-gap{height:22px;border-top:1px dashed var(--line);margin-top:6px}
+.sortbar{display:none}
+#moreFilters{display:none}
+@media (max-width:1000px){
+  #moreFilters{display:inline-block} #extra:not(.open){display:none}
+  table,.tablewrap{display:none}.list{display:block}.sortbar{display:flex}
+  input[type=search]{min-width:0;flex:1 1 100%}
+}
+/* markup mode: controls hidden, extra room for drawing */
+body.markup .controls,body.markup .nav,body.markup .tools{display:none}
+body.markup .filterline{display:block}
+.filterline{display:none;font-size:13px;color:var(--ink2);margin:2px 2px 6px}
+body.markup td{padding-top:9px;padding-bottom:9px}
+body.markup td.notes{min-width:170px}
+body.markup td.name{min-width:200px}
+@media (max-width:1000px){ body.markup .list{margin-right:16%} }
+#exitMarkup{font-size:12px;padding:3px 9px;min-height:0}
+td.name{min-width:200px}
+.tablewrap{overflow-x:auto;border-radius:12px}
+.when .time{display:block;margin-left:0}
+body.markup .asof{display:none}
+#tip{display:none}
+.login{max-width:520px}
+.login input{width:100%;margin:2px 0 8px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:14px;display:none;z-index:9}
+</style>
+</head>
+<body>
+<div class="wrap" id="app" hidden>
+  <div class="top">
+    <div><h1>Assignments</h1><div class="asof" id="asof"></div></div>
+    <div class="nav"><a href="dashboard.html">Dashboard</a><a href="./">Settings</a></div>
+    <button class="btn" id="exitMarkup" hidden>Exit screenshot mode ✕</button>
+  </div>
+  <div class="filterline" id="filterline"></div>
+
+  <div class="panel controls">
+    <div class="presets" role="group" aria-label="Quick views">
+      <button class="chip preset" data-preset="all">Everything</button>
+      <button class="chip preset" data-preset="turnedin">Turned in this week</button>
+      <button class="chip preset" data-preset="missing">Missing</button>
+      <button class="chip preset" data-preset="next7">Due next 7 days</button>
+      <button class="chip preset" data-preset="lastweek">Due last week</button>
+    </div>
+    <button class="btn" id="moreFilters" aria-expanded="false" style="margin-top:8px">Filters</button>
+    <div id="extra">
+    <div class="row" style="margin-top:10px">
+      <span class="legend">Status:</span>
+      <div class="chips" id="statusChips" role="group" aria-label="Status filter"></div>
+    </div>
+    <div class="row">
+      <label>Class<select id="fClass"><option value="">All classes</option></select></label>
+      <label>Type<select id="fType"><option value="">All types</option></select></label>
+      <label>Due<select id="fRange">
+        <option value="">Any time</option><option value="thisweek">This week</option><option value="lastweek">Last week</option>
+        <option value="next7">Next 7 days</option><option value="last30">Last 30 days</option><option value="custom">Custom…</option></select></label>
+      <label id="customFrom" hidden>From<input type="date" id="fFrom"></label>
+      <label id="customTo" hidden>To<input type="date" id="fTo"></label>
+      <input type="search" id="fSearch" placeholder="Search assignment names" aria-label="Search">
+    </div>
+    <div class="row sortbar">
+      <label>Sort by<select id="mSort">
+        <option value="due:desc">Due date, newest first</option><option value="due:asc">Due date, oldest first</option>
+        <option value="sub:desc">Submitted, newest first</option><option value="cls:asc">Class</option>
+        <option value="status:asc">Status</option><option value="score:asc">Score, lowest first</option></select></label>
+    </div>
+    </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="row tools" style="margin:0 0 8px">
+    <button class="btn" id="markup" title="Hides the controls and adds room for notes, for screenshots">Screenshot mode</button>
+    <button class="btn" id="csv">Download CSV</button>
+    <button class="btn" id="refresh">Refresh from Canvas</button>
+    <button class="btn" id="theme" title="Light, dark, or follow the device">Theme: Auto</button>
+  </div>
+
+
+  <div class="tablewrap"><table aria-describedby="summary">
+    <thead><tr id="thead"></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+  <div class="list" id="list"></div>
+</div>
+<div class="wrap login" id="login" hidden></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DAYMS = 864e5;
+const dayStart = d => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const addDays = (d, n) => { const x = dayStart(d); x.setDate(x.getDate() + n); return x; };
+const fmtDay = d => d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"});
+const fmtTime = d => d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+const toast = (msg, ms = 3500) => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); if (ms) t._h = setTimeout(() => t.style.display = "none", ms); };
+let conn = {}; try { conn = JSON.parse(localStorage.getItem("canvasCoachConn") || "{}"); } catch (e) {}
+
+// ---------- theme ----------
+const THEMES = ["auto", "light", "dark"];
+let theme = "auto"; try { theme = localStorage.getItem("ccTheme") || "auto"; } catch (e) {}
+function applyTheme() { document.documentElement.dataset.theme = theme; $("#theme").textContent = "Theme: " + theme[0].toUpperCase() + theme.slice(1); }
+$("#theme").onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % 3]; try { localStorage.setItem("ccTheme", theme); } catch (e) {} applyTheme(); };
+applyTheme();
+
+// ---------- statuses & types ----------
+const STATUS = {
+  due:  {label:"Due",       sym:"○", cls:"s-due",  order:1, hint:"Not turned in yet, deadline still ahead"},
+  miss: {label:"Missing",   sym:"✕", cls:"s-miss", order:0, hint:"Past due and not turned in, or Canvas marked it missing"},
+  late: {label:"Late",      sym:"◷", cls:"s-late", order:2, hint:"Turned in after the deadline"},
+  ok:   {label:"Submitted", sym:"✓", cls:"s-ok",   order:3, hint:"Turned in on time (or graded in an outside tool)"},
+  unk:  {label:"No record", sym:"?", cls:"s-unk",  order:4, hint:"Past due, no submission or grade in Canvas yet (often paper or in-class work)"},
+  exc:  {label:"Excused",   sym:"–", cls:"s-exc",  order:5, hint:"Excused by the instructor"},
+};
+const EXAM = /\b(exam|exams|midterm|test)\b|mini-exam|proctored/i;
+function typeOf(i) {
+  const t = i.t || [];
+  let kind = "Assignment";
+  if (i.exam || EXAM.test(i.n)) kind = "Exam";
+  else if (i.q || t.includes("online_quiz") || /\bquiz\b/i.test(i.n)) kind = "Quiz";
+  else if (t.includes("discussion_topic")) kind = "Discussion";
+  else if (/\b(pre|post)?lab\b|prelab|postlab/i.test(i.n + " " + i.g)) kind = "Lab";
+  else if (/attendance|participation|iclicker/i.test(i.n + " " + i.g)) kind = "Attendance";
+  let where = "";
+  if (i.tool) where = i.tool;
+  else if (t.includes("on_paper")) where = "On paper";
+  else if (t.includes("none") || t.includes("not_graded")) where = "In class / no upload";
+  else if (t.some(x => x.startsWith("online_"))) where = t.includes("online_quiz") ? "Canvas quiz" : "Canvas";
+  return {kind, where};
+}
+function statusOf(i, now) {
+  if (i.x) return "exc";
+  const turnedIn = !!i.sub || (i.s != null && i.s > 0) || i.done;
+  if (turnedIn && !i.miss) return i.late ? "late" : "ok";
+  if (!i.due || i.due > now) return i.miss ? "miss" : "due";
+  if (i.miss || i.s === 0) return "miss";
+  return "unk";
+}
+
+// ---------- state ----------
+let D, NOW, ROWS = [];
+const defaults = {preset:"all", statuses:[], cls:"", type:"", range:"", from:"", to:"", q:"", sort:"due", dir:"desc"};
+let st = {...defaults};
+try { Object.assign(st, JSON.parse(localStorage.getItem("ccAssign") || "{}")); } catch (e) {}
+const save = () => { try { localStorage.setItem("ccAssign", JSON.stringify(st)); } catch (e) {} };
+function weekBounds(offset = 0) { const t = dayStart(NOW), s = addDays(t, -((t.getDay() + 6) % 7) + 7 * offset); return [s, new Date(addDays(s, 7).getTime() - 1)]; }
+function rangeBounds() {
+  switch (st.range) {
+    case "thisweek": return weekBounds(0);
+    case "lastweek": return weekBounds(-1);
+    case "next7": return [NOW, addDays(NOW, 8)];
+    case "last30": return [addDays(NOW, -30), NOW];
+    case "custom": return [st.from ? new Date(st.from + "T00:00:00") : new Date(0), st.to ? new Date(addDays(new Date(st.to + "T00:00:00"), 1).getTime() - 1) : new Date(8.64e15)];
+  }
+  return null;
+}
+function applyPreset(p) {
+  Object.assign(st, {...defaults, preset:p, sort:st.sort, dir:st.dir});
+  if (p === "turnedin") { st.statuses = ["ok", "late"]; st.sort = "sub"; st.dir = "desc"; }
+  if (p === "missing") { st.statuses = ["miss"]; st.sort = "due"; st.dir = "desc"; }
+  if (p === "next7") { st.statuses = ["due"]; st.range = "next7"; st.sort = "due"; st.dir = "asc"; }
+  if (p === "lastweek") { st.range = "lastweek"; st.sort = "due"; st.dir = "asc"; }
+  if (p === "all") { st.sort = "due"; st.dir = "desc"; }
+  render();
+}
+
+// ---------- filter + sort ----------
+function visibleRows() {
+  const rb = rangeBounds(), q = st.q.trim().toLowerCase(), [ws, we] = weekBounds(0);
+  return ROWS.filter(r => {
+    if (st.statuses.length && !st.statuses.includes(r.status)) return false;
+    if (st.cls && r.c !== st.cls) return false;
+    if (st.type && r.type.kind !== st.type) return false;
+    if (q && !(r.n.toLowerCase().includes(q) || r.c.toLowerCase().includes(q))) return false;
+    if (st.preset === "turnedin") {                       // turned in during this week (or graded this week when no submit date)
+      const t = r.sub || (r.grd && r.s != null ? r.grd : null) || (r.due && r.status !== "due" ? r.due : null);
+      if (!t || t < ws || t > we) return false;
+    } else if (rb && (!r.due || r.due < rb[0] || r.due > rb[1])) return false;
+    return true;
+  });
+}
+const SORTERS = {
+  due: r => r.due ? r.due.getTime() : null, sub: r => r.sub ? r.sub.getTime() : null,
+  cls: r => r.c + " " + (r.due ? r.due.toISOString() : ""), name: r => r.n.toLowerCase(),
+  status: r => STATUS[r.status].order, type: r => r.type.kind + " " + r.type.where,
+  score: r => r.s != null && r.p ? r.s / r.p : null, late: r => r.lateDays,
+};
+function sorted(rows) {
+  const f = SORTERS[st.sort] || SORTERS.due, dir = st.dir === "asc" ? 1 : -1;
+  return rows.slice().sort((a, b) => {
+    const x = f(a), y = f(b);
+    if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;   // blanks always last
+    return (x < y ? -1 : x > y ? 1 : 0) * dir || ((a.due?.getTime() || 0) - (b.due?.getTime() || 0)) * -1;
+  });
+}
+
+// ---------- render ----------
+const COLS = [["status","Status"],["cls","Class"],["name","Assignment"],["type","Type"],["due","Due"],["sub","Submitted"],["score","Score"]];
+const when = d => d ? `<span class="day">${fmtDay(d)}</span><span class="time">${fmtTime(d)}</span>` : `<span class="na">n/a</span>`;
+const badge = s => `<span class="badge ${STATUS[s].cls}" title="${esc(STATUS[s].hint)}"><span class="sym" aria-hidden="true">${STATUS[s].sym}</span>${STATUS[s].label}</span>`;
+const scoreTxt = r => r.x ? `<span class="na">excused</span>` : r.s == null ? `<span class="na">—</span>` : `${+r.s.toFixed(2)}/${r.p}${r.p ? ` <span class="sub">${Math.round(100 * r.s / r.p)}%</span>` : ""}`;
+const lateTxt = r => r.lateDays ? `<span class="lateby">${r.lateDays < 1 ? Math.max(1, Math.round(r.lateDays * 24)) + "h" : Math.round(r.lateDays) + "d"}</span>` : "";
+const subTxt = r => r.sub ? when(r.sub) : r.status === "ok" || r.status === "late" ? `<span class="na">${r.type.where && !/^Canvas/.test(r.type.where) && r.type.where !== "On paper" ? "in " + esc(r.type.where) : "no date in Canvas"}</span>` : `<span class="na">n/a</span>`;
+const nameTxt = r => r.u ? `<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.n)}</a>` : esc(r.n);
+
+function filterDescription(n) {
+  const bits = [];
+  const p = {all:"Everything", turnedin:"Turned in this week", missing:"Missing", next7:"Due next 7 days", lastweek:"Due last week"}[st.preset];
+  if (p && st.preset !== "all") bits.push(p);
+  if (st.statuses.length && !["turnedin","missing","next7"].includes(st.preset)) bits.push(st.statuses.map(s => STATUS[s].label).join(" + "));
+  if (st.cls) bits.push(st.cls); if (st.type) bits.push(st.type);
+  if (st.range && !["next7","lastweek"].includes(st.preset)) bits.push($("#fRange").selectedOptions[0].textContent);
+  if (st.q) bits.push(`"${st.q}"`);
+  return (bits.join(" · ") || "All assignments") + ` · ${n} shown · data as of ${NOW.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})}`;
+}
+
+function render() {
+  save();
+  document.querySelectorAll("[data-preset]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.preset === st.preset)));
+  document.querySelectorAll("[data-status]").forEach(b => b.setAttribute("aria-pressed", String(st.statuses.includes(b.dataset.status))));
+  $("#fClass").value = st.cls; $("#fType").value = st.type; $("#fRange").value = st.range; $("#fSearch").value = st.q;
+  $("#customFrom").hidden = $("#customTo").hidden = st.range !== "custom"; $("#fFrom").value = st.from; $("#fTo").value = st.to;
+  $("#mSort").value = `${st.sort}:${st.dir}`;
+  const active = (st.preset === "custom" ? st.statuses.length : 0) + !!st.cls + !!st.type + (!!st.range && !["next7","lastweek"].includes(st.preset)) + !!st.q;
+  $("#moreFilters").textContent = ($("#extra").classList.contains("open") ? "Hide filters" : "Filters & sort") + (active ? ` (${active} on)` : "");
+  const rows = sorted(visibleRows());
+  const count = s => rows.filter(r => r.status === s).length;
+  $("#summary").innerHTML = `<b>${rows.length} shown</b>` + ["miss","late","due","ok","unk"].filter(s => count(s)).map(s => `${badge(s)} ${count(s)}`).join(" ");
+  $("#filterline").textContent = filterDescription(rows.length);
+  const markup = document.body.classList.contains("markup");
+  $("#thead").innerHTML = COLS.map(([k, l]) => `<th scope="col" aria-sort="${st.sort === k ? (st.dir === "asc" ? "ascending" : "descending") : "none"}"><button data-sort="${k}">${l}<span class="arrow">${st.sort === k ? (st.dir === "asc" ? "▲" : "▼") : ""}</span></button></th>`).join("") + (markup ? `<th>Notes</th>` : "");
+  $("#tbody").innerHTML = rows.length ? rows.map(r => `<tr>
+    <td>${badge(r.status)}</td><td class="cls">${esc(r.c)}</td>
+    <td class="name">${nameTxt(r)}<div class="sub">${esc(r.g || "")}</div></td>
+    <td>${esc(r.type.kind)}${r.type.where ? `<div class="sub">${esc(r.type.where)}</div>` : ""}</td>
+    <td class="when">${when(r.due)}</td><td class="when">${subTxt(r)}${r.lateDays ? `<div>${lateTxt(r)} late</div>` : ""}</td><td class="num">${scoreTxt(r)}</td>
+    ${markup ? `<td class="notes"></td>` : ""}</tr>`).join("") : `<tr><td colspan="${COLS.length + (markup ? 1 : 0)}" class="empty">Nothing matches these filters.</td></tr>`;
+  $("#list").innerHTML = rows.length ? rows.map(r => `<div class="item">
+    <div class="l1">${badge(r.status)}<span class="cls">${esc(r.c)}</span><span class="sub">${esc(r.type.kind)}${r.type.where ? " · " + esc(r.type.where) : ""}</span><div class="name">${nameTxt(r)}</div></div>
+    <div class="l2"><span>Due <b>${r.due ? fmtDay(r.due) + " " + fmtTime(r.due) : "n/a"}</b></span>
+      <span>Turned in <b>${r.sub ? fmtDay(r.sub) + " " + fmtTime(r.sub) : r.status === "ok" || r.status === "late" ? (r.type.where && !/^Canvas/.test(r.type.where) ? "in " + esc(r.type.where) : "no date") : "n/a"}</b>${r.lateDays ? " " + lateTxt(r) + " late" : ""}</span>
+      ${r.s != null || r.x ? `<span>Score <b>${scoreTxt(r)}</b></span>` : ""}</div>${markup ? `<div class="markup-gap"></div>` : ""}</div>`).join("") : `<div class="empty">Nothing matches these filters.</div>`;
+}
+
+// ---------- events ----------
+document.addEventListener("click", e => {
+  const p = e.target.closest("[data-preset]"); if (p) return applyPreset(p.dataset.preset);
+  const s = e.target.closest("[data-status]"); if (s) { const k = s.dataset.status; st.statuses = st.statuses.includes(k) ? st.statuses.filter(x => x !== k) : [...st.statuses, k]; st.preset = "custom"; return render(); }
+  const h = e.target.closest("[data-sort]"); if (h) { const k = h.dataset.sort; if (st.sort === k) st.dir = st.dir === "asc" ? "desc" : "asc"; else { st.sort = k; st.dir = ["due","sub","late"].includes(k) ? "desc" : "asc"; } return render(); }
+});
+$("#fClass").onchange = e => { st.cls = e.target.value; st.preset = "custom"; render(); };
+$("#fType").onchange = e => { st.type = e.target.value; st.preset = "custom"; render(); };
+$("#fRange").onchange = e => { st.range = e.target.value; if (st.preset !== "turnedin") st.preset = "custom"; render(); };
+$("#fFrom").onchange = e => { st.from = e.target.value; render(); };
+$("#fTo").onchange = e => { st.to = e.target.value; render(); };
+let qt; $("#fSearch").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { st.q = e.target.value; render(); }, 150); };
+$("#mSort").onchange = e => { const [k, d] = e.target.value.split(":"); st.sort = k; st.dir = d; render(); };
+$("#moreFilters").onclick = () => { const x = $("#extra").classList.toggle("open"); $("#moreFilters").setAttribute("aria-expanded", String(x)); render(); };
+$("#markup").onclick = () => { document.body.classList.add("markup"); $("#exitMarkup").hidden = false; render(); window.scrollTo(0, 0); };
+$("#exitMarkup").onclick = () => { document.body.classList.remove("markup"); $("#exitMarkup").hidden = true; render(); };
+$("#csv").onclick = () => {
+  const rows = sorted(visibleRows()), q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const iso = d => d ? new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16).replace("T", " ") : "";
+  const lines = [["Status","Class","Assignment","Category","Type","Where","Due","Submitted","Days late","Score","Points","Link"].map(q).join(",")]
+    .concat(rows.map(r => [STATUS[r.status].label, r.c, r.n, r.g, r.type.kind, r.type.where, iso(r.due), iso(r.sub), r.lateDays ? r.lateDays.toFixed(1) : "", r.s ?? "", r.p, r.u || ""].map(q).join(",")));
+  const blob = new Blob([lines.join("\n")], {type: "text/csv"}), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `assignments-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$("#refresh").onclick = async () => {
+  if (!conn.token) return toast("Unlock with your GitHub token first.");
+  const before = D.generated;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${conn.owner}/${conn.repo}/actions/workflows/coach.yml/dispatches`, {method:"POST",
+      headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer " + conn.token,"Content-Type":"application/json"}, body: JSON.stringify({ref:"main", inputs:{report:"dashboard"}})});
+    if (!r.ok) throw new Error(r.status === 403 ? "token can't start runs (needs Actions: read and write)" : "GitHub said " + r.status);
+    toast("Pulling fresh data from Canvas… about a minute.", 0);
+    for (let k = 0; k < 16; k++) {
+      await new Promise(res => setTimeout(res, 12000));
+      const d = await loadData(); if (d.generated !== before) { boot(d); return toast("Updated."); }
+    }
+    toast("Still running. Try again in a minute.");
+  } catch (e) { toast("Refresh failed: " + e.message, 6000); }
+};
+
+// ---------- data ----------
+async function loadData() {
+  const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/contents/state/dashboard.json?t=${Date.now()}`,
+    {headers: {"Accept":"application/vnd.github.raw+json","Authorization":"Bearer " + conn.token}, cache: "no-store"});
+  if (!r.ok) throw new Error(r.status === 401 ? "GitHub rejected the token. It may have expired." : r.status === 404 ? "No data yet. Run the coach once." : "GitHub said " + r.status);
+  return r.json();
+}
+function boot(data) {
+  D = data; NOW = new Date(D.generated);
+  ROWS = D.items.map(i => {
+    const r = {...i, due: i.due ? new Date(i.due) : null, sub: i.sub ? new Date(i.sub) : null, grd: i.grd ? new Date(i.grd) : null};
+    r.status = statusOf(r, NOW); r.type = typeOf(r);
+    r.lateDays = r.sub && r.due && r.sub > r.due ? (r.sub - r.due) / DAYMS : (r.status === "late" && r.due && !r.sub ? null : 0);
+    return r;
+  });
+  const classes = [...new Set(ROWS.map(r => r.c))].sort(), kinds = [...new Set(ROWS.map(r => r.type.kind))].sort();
+  $("#fClass").innerHTML = `<option value="">All classes</option>` + classes.map(c => `<option>${esc(c)}</option>`).join("");
+  $("#fType").innerHTML = `<option value="">All types</option>` + kinds.map(c => `<option>${esc(c)}</option>`).join("");
+  $("#statusChips").innerHTML = ["due","miss","late","ok","unk","exc"].map(s => `<button class="chip" data-status="${s}" title="${esc(STATUS[s].hint)}"><span aria-hidden="true">${STATUS[s].sym}</span> ${STATUS[s].label}</button>`).join("");
+  $("#asof").textContent = `From Canvas, ${NOW.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})}`;
+  $("#login").hidden = true; $("#app").hidden = false;
+  render();
+}
+function showLogin(msg) {
+  $("#app").hidden = true; const L = $("#login"); L.hidden = false;
+  L.innerHTML = `<h1>Assignments</h1><p class="asof">Grades stay in your private repo. Unlock with the same GitHub token as the setup page.</p>
+  <div class="panel"><label class="legend">GitHub owner</label><input id="gO"><label class="legend">Repo</label><input id="gR">
+  <label class="legend">Fine-grained token</label><input id="gT" type="password"><label class="legend" style="display:block;margin:4px 0 10px"><input type="checkbox" id="gM" style="width:auto"> Remember on this device</label>
+  <button class="btn primary" id="gGo">Load assignments</button><p id="gMsg" style="color:var(--miss-fg);font-size:14px">${esc(msg || "")}</p></div>`;
+  $("#gO").value = conn.owner || "codeted323"; $("#gR").value = conn.repo || "canvas-coach"; $("#gT").value = conn.token || ""; $("#gM").checked = !!conn.token;
+  $("#gGo").onclick = async () => {
+    conn = {owner: $("#gO").value.trim(), repo: $("#gR").value.trim(), token: $("#gT").value.trim()};
+    try { localStorage.setItem("canvasCoachConn", JSON.stringify($("#gM").checked ? conn : {owner: conn.owner, repo: conn.repo})); } catch (e) {}
+    $("#gMsg").textContent = "Loading…";
+    try { boot(await loadData()); } catch (e) { $("#gMsg").textContent = e.message; }
+  };
+}
+(async () => {
+  if (window.__DATA__) return boot(window.__DATA__);         // local preview copies have the data baked in
+  if (!conn.token) return showLogin();
+  try { boot(await loadData()); } catch (e) { showLogin(e.message); }
+})();
+</script>
+</body>
+</html>

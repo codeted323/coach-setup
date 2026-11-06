@@ -66,6 +66,7 @@ details summary{cursor:pointer;color:var(--accent);font-size:13px;margin-top:8px
 <header>
   <h1>Performance dashboard</h1>
   <p id="asof"></p>
+  <p class="small"><a href="assignments.html" style="color:var(--accent)">Assignments table</a> · <a href="./" style="color:var(--accent)">Settings</a></p>
 </header>
 
 <div class="bar">
@@ -174,7 +175,7 @@ SEM_START = D.semester.start ? new Date(D.semester.start + "T00:00:00") : addDay
 CLASSES_END = D.semester.classes_end ? new Date(D.semester.classes_end + "T23:59:00") : addDays(NOW, 40);
 
 // ---------------- data prep ----------------
-items = D.items.map(i => ({...i,
+items = D.items.filter(i => !i.x).map(i => ({...i,
   due: i.due ? new Date(i.due) : null,
   sub: i.sub ? new Date(i.sub) : null,
   grd: i.grd ? new Date(i.grd) : (i.s != null ? (i.due && new Date(i.due) <= NOW ? new Date(i.due) : NOW) : null)}));
