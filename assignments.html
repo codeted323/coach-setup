@@ -115,6 +115,31 @@ body.markup .asof{display:none}
 #tip{display:none}
 .login{max-width:520px}
 .login input{width:100%;margin:2px 0 8px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.qbtn{font-weight:700}
+.qbtn[aria-pressed="true"]{background:var(--ok-fg);border-color:var(--ok-fg);color:var(--card)}
+#queue h2{font-size:16px;margin:16px 2px 4px;display:flex;gap:8px;align-items:center}
+#queue .lead{font-size:14px;color:var(--ink2);margin:2px 2px 10px;max-width:760px}
+.q{display:grid;grid-template-columns:34px 1fr;gap:4px 10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
+.q .rk{font-size:20px;font-weight:750;color:var(--ink3);text-align:center;line-height:1.2}
+.q .ttl{display:flex;flex-wrap:wrap;gap:6px 9px;align-items:baseline}
+.q .ttl .cls{font-size:15px}
+.q .ttl .name{font-size:15px;font-weight:600;flex:1 1 260px}
+.q .meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--ink2);margin-top:3px}
+.q .meta b{color:var(--ink)}
+.q .why{font-size:13px;color:var(--ink2);margin-top:4px}
+.q .act{font-size:13.5px;margin-top:4px;font-weight:600}
+.q .note{font-size:12.5px;color:var(--late-fg);margin-top:3px}
+.q.done{opacity:.5}.q.done .name{text-decoration:line-through}
+.q label.tick{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink3);cursor:pointer}
+.flag{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;white-space:nowrap}
+.flag.req{color:var(--miss-fg);background:var(--miss-bg)}.flag.soon{color:var(--late-fg);background:var(--late-bg)}
+.worth{font-variant-numeric:tabular-nums}
+details.nope summary{cursor:pointer;font-size:15px;font-weight:650;margin:16px 2px 6px}
+.nope .q{grid-template-columns:1fr;opacity:.85}
+body.markup .q{margin-right:16%}
+body.markup label.tick{display:none}
+body.queue-on #tableArea{display:none}
+body:not(.queue-on) #queue{display:none}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:14px;display:none;z-index:9}
 </style>
 </head>
@@ -129,6 +154,7 @@ body.markup .asof{display:none}
 
   <div class="panel controls">
     <div class="presets" role="group" aria-label="Quick views">
+      <button class="chip qbtn" id="queueBtn" aria-pressed="false">Work queue</button>
       <button class="chip preset" data-preset="all">Everything</button>
       <button class="chip preset" data-preset="turnedin">Turned in this week</button>
       <button class="chip preset" data-preset="missing">Missing</button>
@@ -169,11 +195,14 @@ body.markup .asof{display:none}
   </div>
 
 
+  <div id="queue"></div>
+  <div id="tableArea">
   <div class="tablewrap"><table aria-describedby="summary">
     <thead><tr id="thead"></tr></thead>
     <tbody id="tbody"></tbody>
   </table></div>
   <div class="list" id="list"></div>
+  </div>
 </div>
 <div class="wrap login" id="login" hidden></div>
 <div class="toast" id="toast" role="status"></div>
@@ -309,6 +338,13 @@ function filterDescription(n) {
 
 function render() {
   save();
+  document.body.classList.toggle("queue-on", !!st.queue);
+  $("#queueBtn").setAttribute("aria-pressed", String(!!st.queue));
+  if (st.queue) {
+    document.querySelectorAll("[data-preset]").forEach(b => b.setAttribute("aria-pressed", "false"));
+    $("#fClass").value = st.cls;
+    return renderQueue();
+  }
   document.querySelectorAll("[data-preset]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.preset === st.preset)));
   document.querySelectorAll("[data-status]").forEach(b => b.setAttribute("aria-pressed", String(st.statuses.includes(b.dataset.status))));
   $("#fClass").value = st.cls; $("#fType").value = st.type; $("#fRange").value = st.range; $("#fSearch").value = st.q;
@@ -335,13 +371,52 @@ function render() {
       ${r.s != null || r.x ? `<span>Score <b>${scoreTxt(r)}</b></span>` : ""}</div>${markup ? `<div class="markup-gap"></div>` : ""}</div>`).join("") : `<div class="empty">Nothing matches these filters.</div>`;
 }
 
+// ---------- work queue ----------
+let doneKeys = new Set(); try { doneKeys = new Set(JSON.parse(localStorage.getItem("ccQueueDone") || "[]")); } catch (e) {}
+const saveDone = () => { try { localStorage.setItem("ccQueueDone", JSON.stringify([...doneKeys])); } catch (e) {} };
+const pct = v => v >= 1 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v > 0 ? "<0.1" : "0";
+function qItem(r, numbered) {
+  const due = r.due ? new Date(r.due) : null, until = r.until ? new Date(r.until) : null;
+  const flags = (r.required ? `<span class="flag req">Required to pass</span>` : "") + (r.closing_soon ? `<span class="flag soon">Window closes ${fmtDay(until)}</span>` : "");
+  const worth = r.verdict === "no" ? "" : `<span>Worth <b class="worth">≈${pct(r.value)}%</b> of ${esc(r.c === "Calc Lab" ? "MA2160" : r.c)}'s grade</span>`;
+  const credit = r.verdict === "no" ? "" : `<span>Credit left <b>${Math.round(r.credit * 100)}%</b></span>`;
+  const win = r.verdict !== "no" && until ? `<span>Late window <b>until ${fmtDay(until)} ${fmtTime(until)}</b></span>` : "";
+  const done = doneKeys.has(r.key);
+  return `<div class="q${done ? " done" : ""}">${numbered ? `<div class="rk">${r.rank}</div>` : ""}<div>
+    <div class="ttl"><span class="cls">${esc(r.c)}</span><span class="name">${r.u ? `<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.n)}</a>` : esc(r.n)}</span>${flags}
+      ${numbered ? `<label class="tick"><input type="checkbox" data-done="${esc(r.key)}" ${done ? "checked" : ""}> done</label>` : ""}</div>
+    <div class="meta">${worth}${credit}<span>Was due <b>${due ? fmtDay(due) : "n/a"}</b> (${Math.round(r.days_late)}d ago)</span>${win}</div>
+    <div class="why">${esc(r.why)}</div>${r.action ? `<div class="act">→ ${esc(r.action)}</div>` : ""}${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}
+  </div></div>`;
+}
+function renderQueue() {
+  const Q = (D.triage || []).filter(r => !st.cls || r.c === st.cls || (st.cls === "MA2160" && r.c === "Calc Lab"));
+  const sure = Q.filter(r => r.verdict === "sure"), check = Q.filter(r => r.verdict === "check"), no = Q.filter(r => r.verdict === "no");
+  const open = sure.filter(r => !doneKeys.has(r.key));
+  $("#summary").innerHTML = `<b>${open.length} to do</b> <span class="badge s-ok"><span class="sym">✓</span>Can still earn points</span> ${sure.length}
+    <span class="badge s-unk"><span class="sym">?</span>Ask first</span> ${check.length} <span class="badge s-exc"><span class="sym">–</span>Won't count</span> ${no.length}`;
+  $("#filterline").textContent = `Work queue${st.cls ? " · " + st.cls : ""} · ${open.length} to do · data as of ${NOW.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})}`;
+  $("#queue").innerHTML = (Q.length ? "" : `<div class="empty">No late or missing work. Nice.</div>`) +
+    (sure.length ? `<h2>Do these now <span class="badge s-ok"><span class="sym">✓</span>${sure.length}</span></h2>
+      <p class="lead">Late work the syllabus still gives points for, best payoff first. Items required to pass come first, then anything whose late window closes in 3 days, then by grade impact weighted by credit hours.</p>
+      ${sure.map(r => qItem(r, true)).join("")}` : "") +
+    (check.length ? `<h2>Ask or check first <span class="badge s-unk"><span class="sym">?</span>${check.length}</span></h2>
+      <p class="lead">These might count. Each one says what to check. Do the quick check before spending time on the work.</p>
+      ${check.map(r => qItem(r, true)).join("")}` : "") +
+    (no.length ? `<details class="nope"><summary>Won't earn points: skip these (${no.length})</summary>
+      <p class="lead">The syllabus rules these out. Only an excused absence or emergency would change that.</p>${no.map(r => qItem(r, false)).join("")}</details>` : "");
+}
+
 // ---------- events ----------
 document.addEventListener("click", e => {
-  const p = e.target.closest("[data-preset]"); if (p) return applyPreset(p.dataset.preset);
+  const p = e.target.closest("[data-preset]"); if (p) { st.queue = false; return applyPreset(p.dataset.preset); }
+  if (e.target.closest("#queueBtn")) { st.queue = !st.queue; return render(); }
   const s = e.target.closest("[data-status]"); if (s) { const k = s.dataset.status; st.statuses = st.statuses.includes(k) ? st.statuses.filter(x => x !== k) : [...st.statuses, k]; st.preset = "custom"; return render(); }
   const h = e.target.closest("[data-sort]"); if (h) { const k = h.dataset.sort; if (st.sort === k) st.dir = st.dir === "asc" ? "desc" : "asc"; else { st.sort = k; st.dir = ["due","sub","late"].includes(k) ? "desc" : "asc"; } return render(); }
 });
-$("#fClass").onchange = e => { st.cls = e.target.value; st.preset = "custom"; render(); };
+$("#fClass").onchange = e => { st.cls = e.target.value; if (!st.queue) st.preset = "custom"; render(); };
+document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.done; if (!k) return;
+  e.target.checked ? doneKeys.add(k) : doneKeys.delete(k); saveDone(); render(); });
 $("#fType").onchange = e => { st.type = e.target.value; st.preset = "custom"; render(); };
 $("#fRange").onchange = e => { st.range = e.target.value; if (st.preset !== "turnedin") st.preset = "custom"; render(); };
 $("#fFrom").onchange = e => { st.from = e.target.value; render(); };
