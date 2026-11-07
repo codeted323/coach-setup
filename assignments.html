@@ -496,8 +496,19 @@ $("#csv").onclick = () => {
 };
 $("#refresh").onclick = async () => {
   if (!conn.token) return toast("Unlock with your GitHub token first.");
-  const before = D.generated;
+  let before = D.generated;
   try {
+    // Are-you-sure if anyone (or the hourly schedule) refreshed in the last 10 minutes, or a run is already going.
+    try { const d = await loadData(); before = d.generated; if (d.generated !== D.generated) boot(d); } catch (e) {}
+    let running = null;
+    try {
+      const rr = await fetch(`https://api.github.com/repos/${conn.owner}/${conn.repo}/actions/runs?per_page=5`, {headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer " + conn.token}, cache:"no-store"});
+      if (rr.ok) running = ((await rr.json()).workflow_runs || []).find(x => x.status !== "completed");
+    } catch (e) {}
+    const mins = Math.floor((Date.now() - new Date(before).getTime()) / 6e4);
+    const ago = m => m < 1 ? "less than a minute" : `${m} minute${m === 1 ? "" : "s"}`;
+    if (running && !confirm(`A refresh is already running (started ${ago(Math.floor((Date.now() - new Date(running.created_at)) / 6e4))} ago). It should finish in about a minute.\n\nStart another one anyway?`)) return;
+    if (!running && mins < 10 && !confirm(`Last refresh was ${ago(mins)} ago. The data also updates on its own every hour.\n\nRefresh again anyway?`)) return;
     const r = await fetch(`https://api.github.com/repos/${conn.owner}/${conn.repo}/actions/workflows/coach.yml/dispatches`, {method:"POST",
       headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer " + conn.token,"Content-Type":"application/json"}, body: JSON.stringify({ref:"main", inputs:{report:"dashboard"}})});
     if (!r.ok) throw new Error(r.status === 403 ? "token can't start runs (needs Actions: read and write)" : "GitHub said " + r.status);
