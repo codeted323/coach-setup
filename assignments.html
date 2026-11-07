@@ -348,7 +348,7 @@ function sorted(rows) {
 const COLS = [["status","Status"],["cls","Class"],["name","Assignment"],["type","Type"],["due","Due"],["sub","Submitted"],["score","Score"]];
 const when = d => d ? `<span class="day">${fmtDay(d)}</span><span class="time">${fmtTime(d)}</span>` : `<span class="na">n/a</span>`;
 const badge = s => `<span class="badge ${STATUS[s].cls}" title="${esc(STATUS[s].hint)}"><span class="sym" aria-hidden="true">${STATUS[s].sym}</span>${STATUS[s].label}</span>`;
-const scoreTxt = r => r.x ? `<span class="na">excused</span>` : r.s == null ? `<span class="na">—</span>` : `${+r.s.toFixed(2)}/${r.p}${r.p ? ` <span class="sub">${Math.round(100 * r.s / r.p)}%</span>` : ""}`;
+const scoreTxt = r => r.x ? `<span class="na">excused</span>` : r.hid && r.s == null ? `<span class="na" title="Canvas has it as submitted or graded, but the score isn't posted yet">not posted</span>` : r.s == null ? `<span class="na">—</span>` : `${+r.s.toFixed(2)}/${r.p}${r.p ? ` <span class="sub">${Math.round(100 * r.s / r.p)}%</span>` : ""}`;
 const lateTxt = r => r.lateDays ? `<span class="lateby">${r.lateDays < 1 ? Math.max(1, Math.round(r.lateDays * 24)) + "h" : Math.round(r.lateDays) + "d"}</span>` : "";
 const subTxt = r => r.sub ? when(r.sub) : r.status === "ok" || r.status === "late" ? `<span class="na">${r.type.where && !/^Canvas/.test(r.type.where) && r.type.where !== "On paper" ? "in " + esc(r.type.where) : "no date in Canvas"}</span>` : `<span class="na">n/a</span>`;
 const nameTxt = r => r.u ? `<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.n)}</a>` : esc(r.n);
@@ -411,7 +411,7 @@ function compactTable(rows, markup) {
   const H = [["status",""],["cls","Class"],["name","Name"],["due","Due","r"],["sub","In","r"],["score","Score","r"]];
   const head = H.map(([k, l, c]) => `<th${c || k === "name" ? ` class="${c || "n"}"` : ""}><button data-sort="${k}">${l}<span class="arrow">${st.sort === k ? (st.dir === "asc" ? "▲" : "▼") : ""}</span></button></th>`).join("") + (markup ? `<th>Notes</th>` : "");
   const sub = r => r.sub ? (r.lateDays >= 1 ? `<span class="ltd">${md(r.sub)}</span>` : md(r.sub)) + (r.lateDays >= 1 ? ` <span class="lt">+${Math.round(r.lateDays)}d</span>` : "") : r.status === "ok" || r.status === "late" ? "✓" : "—";
-  const sc = r => r.x ? "exc" : r.s == null ? "—" : r.p ? Math.round(100 * r.s / r.p) + "%" : +r.s.toFixed(1);
+  const sc = r => r.x ? "exc" : r.hid && r.s == null ? "hidden" : r.s == null ? "—" : r.p ? Math.round(100 * r.s / r.p) + "%" : +r.s.toFixed(1);
   return `<table class="ct"><thead><tr>${head}</tr></thead><tbody>${rows.length ? rows.map(r => `<tr><td>${symTag(r.status)}</td><td class="c">${esc(r.c)}</td>
     <td class="n">${nameLink(r.n, r.u)}</td><td class="r">${md(r.due)}</td><td class="r">${sub(r)}</td><td class="r">${sc(r)}</td>${markup ? `<td class="nt"></td>` : ""}</tr>`).join("")
     : `<tr><td colspan="7" class="empty">Nothing matches these filters.</td></tr>`}</tbody></table>`;
