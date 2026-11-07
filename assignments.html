@@ -140,6 +140,32 @@ body.markup .q{margin-right:16%}
 body.markup label.tick{display:none}
 body.queue-on #tableArea{display:none}
 body:not(.queue-on) #queue{display:none}
+/* compact view: one line per row */
+#compactArea{display:none}
+body.compact #compactArea{display:block}
+body.compact #tableArea .tablewrap,body.compact #list,body.compact #queue .q,body.compact #queue .lead{display:none!important}
+table.ct{display:table!important;table-layout:auto;margin:0 0 6px}
+.ct th,.ct td{padding:3px 6px;font-size:12.5px;line-height:1.35;white-space:nowrap;vertical-align:middle}
+.ct th{font-size:11px;position:static}
+.ct th.n{max-width:0;width:100%;overflow:hidden}
+.ct td.n{max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis}
+.ct td.n a{color:var(--ink);text-decoration:none}
+.ct td.c{font-weight:650}
+.ct td.r,.ct th.r{text-align:right;font-variant-numeric:tabular-nums}
+.ct td.k{font-weight:700;color:var(--ink3);text-align:right}
+.ct .sy{display:inline-block;width:17px;text-align:center;border-radius:4px;font-size:11.5px;font-weight:700}
+.ct .tag{font-size:10px;font-weight:750;padding:0 4px;border-radius:4px;margin-right:4px;color:var(--miss-fg);background:var(--miss-bg)}
+.ct .soon{color:var(--late-fg);font-weight:700}
+.ct .lt{color:var(--late-fg);font-size:11px;font-weight:600}
+.ct tr.done td{opacity:.45}.ct tr.done td.n{text-decoration:line-through}
+.ct input{margin:0;vertical-align:middle}
+.ct td.nt{min-width:120px;width:22%;border-left:1px dashed var(--line)}
+#queue.ctq h2{font-size:14px;margin:10px 2px 4px}
+#queue.ctq details.nope summary{font-size:13.5px;margin:10px 2px 4px}
+body.compact.markup .q{margin-right:0}
+body.markup .ct td{padding-top:3px;padding-bottom:3px}
+@media (max-width:600px){ .ct th,.ct td{padding:3px 4px;font-size:12px} .ct td.c{font-size:11px} .ct .opt,.ct .lt{display:none} .ct .ltd{color:var(--late-fg);font-weight:700} .ct td.nt{min-width:52px} }
+@media (max-width:1000px){ .ct td.nt{min-width:64px;width:18%} body.compact.markup .list{margin-right:0} }
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:14px;display:none;z-index:9}
 </style>
 </head>
@@ -188,6 +214,7 @@ body:not(.queue-on) #queue{display:none}
 
   <div class="summary" id="summary"></div>
   <div class="row tools" style="margin:0 0 8px">
+    <button class="btn" id="compactBtn" aria-pressed="false" title="One line per assignment, small type">Compact: Off</button>
     <button class="btn" id="markup" title="Hides the controls and adds room for notes, for screenshots">Screenshot mode</button>
     <button class="btn" id="csv">Download CSV</button>
     <button class="btn" id="refresh">Refresh from Canvas</button>
@@ -195,6 +222,7 @@ body:not(.queue-on) #queue{display:none}
   </div>
 
 
+  <div id="compactArea"></div>
   <div id="queue"></div>
   <div id="tableArea">
   <div class="tablewrap"><table aria-describedby="summary">
@@ -338,6 +366,9 @@ function filterDescription(n) {
 
 function render() {
   save();
+  document.body.classList.toggle("compact", !!st.compact);
+  $("#compactBtn").textContent = "Compact: " + (st.compact ? "On" : "Off"); $("#compactBtn").setAttribute("aria-pressed", String(!!st.compact));
+  if (st.queue) $("#compactArea").innerHTML = "";
   document.body.classList.toggle("queue-on", !!st.queue);
   $("#queueBtn").setAttribute("aria-pressed", String(!!st.queue));
   if (st.queue) {
@@ -357,6 +388,7 @@ function render() {
   $("#summary").innerHTML = `<b>${rows.length} shown</b>` + ["miss","late","due","ok","unk"].filter(s => count(s)).map(s => `${badge(s)} ${count(s)}`).join(" ");
   $("#filterline").textContent = filterDescription(rows.length);
   const markup = document.body.classList.contains("markup");
+  $("#compactArea").innerHTML = st.compact ? compactTable(rows, markup) : "";
   $("#thead").innerHTML = COLS.map(([k, l]) => `<th scope="col" aria-sort="${st.sort === k ? (st.dir === "asc" ? "ascending" : "descending") : "none"}"><button data-sort="${k}">${l}<span class="arrow">${st.sort === k ? (st.dir === "asc" ? "▲" : "▼") : ""}</span></button></th>`).join("") + (markup ? `<th>Notes</th>` : "");
   $("#tbody").innerHTML = rows.length ? rows.map(r => `<tr>
     <td>${badge(r.status)}</td><td class="cls">${esc(r.c)}</td>
@@ -369,6 +401,31 @@ function render() {
     <div class="l2"><span>Due <b>${r.due ? fmtDay(r.due) + " " + fmtTime(r.due) : "n/a"}</b></span>
       <span>Turned in <b>${r.sub ? fmtDay(r.sub) + " " + fmtTime(r.sub) : r.status === "ok" || r.status === "late" ? (r.type.where && !/^Canvas/.test(r.type.where) ? "in " + esc(r.type.where) : "no date") : "n/a"}</b>${r.lateDays ? " " + lateTxt(r) + " late" : ""}</span>
       ${r.s != null || r.x ? `<span>Score <b>${scoreTxt(r)}</b></span>` : ""}</div>${markup ? `<div class="markup-gap"></div>` : ""}</div>`).join("") : `<div class="empty">Nothing matches these filters.</div>`;
+}
+
+// ---------- compact view ----------
+const md = d => d ? `${d.getMonth() + 1}/${d.getDate()}` : "—";
+const symTag = s => `<span class="sy ${STATUS[s].cls}" title="${esc(STATUS[s].label)}">${STATUS[s].sym}</span>`;
+const nameLink = (n, u) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener" title="${esc(n)}">${esc(n)}</a>` : `<span title="${esc(n)}">${esc(n)}</span>`;
+function compactTable(rows, markup) {
+  const H = [["status",""],["cls","Class"],["name","Name"],["due","Due","r"],["sub","In","r"],["score","Score","r"]];
+  const head = H.map(([k, l, c]) => `<th${c || k === "name" ? ` class="${c || "n"}"` : ""}><button data-sort="${k}">${l}<span class="arrow">${st.sort === k ? (st.dir === "asc" ? "▲" : "▼") : ""}</span></button></th>`).join("") + (markup ? `<th>Notes</th>` : "");
+  const sub = r => r.sub ? (r.lateDays >= 1 ? `<span class="ltd">${md(r.sub)}</span>` : md(r.sub)) + (r.lateDays >= 1 ? ` <span class="lt">+${Math.round(r.lateDays)}d</span>` : "") : r.status === "ok" || r.status === "late" ? "✓" : "—";
+  const sc = r => r.x ? "exc" : r.s == null ? "—" : r.p ? Math.round(100 * r.s / r.p) + "%" : +r.s.toFixed(1);
+  return `<table class="ct"><thead><tr>${head}</tr></thead><tbody>${rows.length ? rows.map(r => `<tr><td>${symTag(r.status)}</td><td class="c">${esc(r.c)}</td>
+    <td class="n">${nameLink(r.n, r.u)}</td><td class="r">${md(r.due)}</td><td class="r">${sub(r)}</td><td class="r">${sc(r)}</td>${markup ? `<td class="nt"></td>` : ""}</tr>`).join("")
+    : `<tr><td colspan="7" class="empty">Nothing matches these filters.</td></tr>`}</tbody></table>`;
+}
+function compactQueue(rows, numbered, markup) {
+  if (!rows.length) return "";
+  const ticks = numbered && !markup;
+  const head = `${numbered ? `<th class="r">#</th>` : ""}<th>Class</th><th class="n">Assignment</th>${numbered ? `<th class="r">Worth</th><th class="r opt">Credit</th><th class="r">Until</th>` : `<th class="r">Due</th>`}${ticks ? `<th>✓</th>` : ""}${markup ? `<th>Notes</th>` : ""}`;
+  return `<table class="ct"><thead><tr>${head}</tr></thead><tbody>${rows.map(r => {
+    const until = r.until ? new Date(r.until) : null, done = doneKeys.has(r.key);
+    return `<tr${done ? ` class="done"` : ""}>${numbered ? `<td class="k">${r.rank}</td>` : ""}<td class="c">${esc(r.c)}</td>
+      <td class="n">${r.required ? `<span class="tag" title="Required to pass">REQ</span>` : ""}${nameLink(r.n, r.u)}</td>
+      ${numbered ? `<td class="r">${pct(r.value)}%</td><td class="r opt">${Math.round(r.credit * 100)}%</td><td class="r${r.closing_soon ? " soon" : ""}">${until ? md(until) : "—"}</td>` : `<td class="r">${r.due ? md(new Date(r.due)) : "—"}</td>`}
+      ${ticks ? `<td><input type="checkbox" data-done="${esc(r.key)}" ${done ? "checked" : ""} aria-label="done"></td>` : ""}${markup ? `<td class="nt"></td>` : ""}</tr>`; }).join("")}</tbody></table>`;
 }
 
 // ---------- work queue ----------
@@ -393,18 +450,20 @@ function renderQueue() {
   const Q = (D.triage || []).filter(r => !st.cls || r.c === st.cls || (st.cls === "MA2160" && r.c === "Calc Lab"));
   const sure = Q.filter(r => r.verdict === "sure"), check = Q.filter(r => r.verdict === "check"), no = Q.filter(r => r.verdict === "no");
   const open = sure.filter(r => !doneKeys.has(r.key));
+  const C = !!st.compact, mk = document.body.classList.contains("markup");
+  $("#queue").classList.toggle("ctq", C);
   $("#summary").innerHTML = `<b>${open.length} to do</b> <span class="badge s-ok"><span class="sym">✓</span>Can still earn points</span> ${sure.length}
     <span class="badge s-unk"><span class="sym">?</span>Ask first</span> ${check.length} <span class="badge s-exc"><span class="sym">–</span>Won't count</span> ${no.length}`;
   $("#filterline").textContent = `Work queue${st.cls ? " · " + st.cls : ""} · ${open.length} to do · data as of ${NOW.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})}`;
   $("#queue").innerHTML = (Q.length ? "" : `<div class="empty">No late or missing work. Nice.</div>`) +
     (sure.length ? `<h2>Do these now <span class="badge s-ok"><span class="sym">✓</span>${sure.length}</span></h2>
       <p class="lead">Late work the syllabus still gives points for, best payoff first. Items required to pass come first, then anything whose late window closes in 3 days, then by grade impact weighted by credit hours.</p>
-      ${sure.map(r => qItem(r, true)).join("")}` : "") +
+      ${C ? compactQueue(sure, true, mk) : sure.map(r => qItem(r, true)).join("")}` : "") +
     (check.length ? `<h2>Ask or check first <span class="badge s-unk"><span class="sym">?</span>${check.length}</span></h2>
       <p class="lead">These might count. Each one says what to check. Do the quick check before spending time on the work.</p>
-      ${check.map(r => qItem(r, true)).join("")}` : "") +
+      ${C ? compactQueue(check, true, mk) : check.map(r => qItem(r, true)).join("")}` : "") +
     (no.length ? `<details class="nope"><summary>Won't earn points: skip these (${no.length})</summary>
-      <p class="lead">The syllabus rules these out. Only an excused absence or emergency would change that.</p>${no.map(r => qItem(r, false)).join("")}</details>` : "");
+      <p class="lead">The syllabus rules these out. Only an excused absence or emergency would change that.</p>${C ? compactQueue(no, false, mk) : no.map(r => qItem(r, false)).join("")}</details>` : "");
 }
 
 // ---------- events ----------
@@ -424,6 +483,7 @@ $("#fTo").onchange = e => { st.to = e.target.value; render(); };
 let qt; $("#fSearch").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { st.q = e.target.value; render(); }, 150); };
 $("#mSort").onchange = e => { const [k, d] = e.target.value.split(":"); st.sort = k; st.dir = d; render(); };
 $("#moreFilters").onclick = () => { const x = $("#extra").classList.toggle("open"); $("#moreFilters").setAttribute("aria-expanded", String(x)); render(); };
+$("#compactBtn").onclick = () => { st.compact = !st.compact; render(); };
 $("#markup").onclick = () => { document.body.classList.add("markup"); $("#exitMarkup").hidden = false; render(); window.scrollTo(0, 0); };
 $("#exitMarkup").onclick = () => { document.body.classList.remove("markup"); $("#exitMarkup").hidden = true; render(); };
 $("#csv").onclick = () => {
