@@ -164,6 +164,10 @@ body.compact.markup .q{margin-right:0}
 body.markup .ct td{padding-top:3px;padding-bottom:3px}
 @media (max-width:600px){ .ct th,.ct td{padding:3px 4px;font-size:12px} .ct td.c{font-size:11px} .ct .opt,.ct .lt{display:none} .ct .ltd{color:var(--late-fg);font-weight:700} .ct td.nt{min-width:52px} }
 @media (max-width:1000px){ .ct td.nt{min-width:64px;width:18%} body.compact.markup .list{margin-right:0} }
+label.mk{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--ink3);margin-right:8px;cursor:pointer;vertical-align:1px}
+label.mk input{margin:0}
+body.markup label.mk{display:none}
+.q.done-wait{grid-template-columns:0 1fr;opacity:.85}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:14px;display:none;z-index:9}
 </style>
 </head>
@@ -257,6 +261,7 @@ const STATUS = {
   miss: {label:"Missing",   sym:"✕", cls:"s-miss", order:0, hint:"Past due and not turned in, or Canvas marked it missing"},
   late: {label:"Late",      sym:"◷", cls:"s-late", order:2, hint:"Turned in after the deadline"},
   ok:   {label:"Submitted", sym:"✓", cls:"s-ok",   order:3, hint:"Turned in on time (or graded in an outside tool)"},
+  mark: {label:"Marked done", sym:"☑", cls:"s-ok", order:3.5, hint:"Checked off here or in Discord; Canvas hasn't caught up yet (outside tool or waiting on grading)"},
   unk:  {label:"No record", sym:"?", cls:"s-unk",  order:4, hint:"Past due, no submission or grade in Canvas yet (often paper or in-class work)"},
   exc:  {label:"Excused",   sym:"–", cls:"s-exc",  order:5, hint:"Excused by the instructor"},
 };
@@ -276,10 +281,15 @@ function typeOf(i) {
   else if (t.some(x => x.startsWith("online_"))) where = t.includes("online_quiz") ? "Canvas quiz" : "Canvas";
   return {kind, where};
 }
+// ---------- checked off by hand (shared via state/done.json in the private repo) ----------
+let pend = {}; try { pend = JSON.parse(localStorage.getItem("ccPending") || "{}"); } catch (e) {}
+const savePend = () => { try { localStorage.setItem("ccPending", JSON.stringify(pend)); } catch (e) {} };
+const canvasIn = i => !!i.sub || (i.s != null && i.s > 0) || (i.done && !i.sd);
+const isMarked = i => i.u && pend[i.u] ? pend[i.u].done : !!i.sd;
 function statusOf(i, now) {
   if (i.x) return "exc";
-  const turnedIn = !!i.sub || (i.s != null && i.s > 0) || i.done;
-  if (turnedIn && !i.miss) return i.late ? "late" : "ok";
+  if (canvasIn(i) && !i.miss) return i.late ? "late" : "ok";
+  if (isMarked(i)) return "mark";
   if (!i.due || i.due > now) return i.miss ? "miss" : "due";
   if (i.miss || i.s === 0) return "miss";
   return "unk";
@@ -383,19 +393,19 @@ function render() {
   $("#moreFilters").textContent = ($("#extra").classList.contains("open") ? "Hide filters" : "Filters & sort") + (active ? ` (${active} on)` : "");
   const rows = sorted(visibleRows());
   const count = s => rows.filter(r => r.status === s).length;
-  $("#summary").innerHTML = `<b>${rows.length} shown</b>` + ["miss","late","due","ok","unk"].filter(s => count(s)).map(s => `${badge(s)} ${count(s)}`).join(" ");
+  $("#summary").innerHTML = `<b>${rows.length} shown</b>` + ["miss","late","due","ok","mark","unk"].filter(s => count(s)).map(s => `${badge(s)} ${count(s)}`).join(" ");
   $("#filterline").textContent = filterDescription(rows.length);
   const markup = document.body.classList.contains("markup");
   $("#compactArea").innerHTML = st.compact ? compactTable(rows, markup) : "";
   $("#thead").innerHTML = COLS.map(([k, l]) => `<th scope="col" aria-sort="${st.sort === k ? (st.dir === "asc" ? "ascending" : "descending") : "none"}"><button data-sort="${k}">${l}<span class="arrow">${st.sort === k ? (st.dir === "asc" ? "▲" : "▼") : ""}</span></button></th>`).join("") + (markup ? `<th>Notes</th>` : "");
   $("#tbody").innerHTML = rows.length ? rows.map(r => `<tr>
     <td>${badge(r.status)}</td><td class="cls">${esc(r.c)}</td>
-    <td class="name">${nameTxt(r)}<div class="sub">${esc(r.g || "")}</div></td>
+    <td class="name">${markBox(r)}${nameTxt(r)}<div class="sub">${esc(r.g || "")}</div></td>
     <td>${esc(r.type.kind)}${r.type.where ? `<div class="sub">${esc(r.type.where)}</div>` : ""}</td>
     <td class="when">${when(r.due)}</td><td class="when">${subTxt(r)}${r.lateDays ? `<div>${lateTxt(r)} late</div>` : ""}</td><td class="num">${scoreTxt(r)}</td>
     ${markup ? `<td class="notes"></td>` : ""}</tr>`).join("") : `<tr><td colspan="${COLS.length + (markup ? 1 : 0)}" class="empty">Nothing matches these filters.</td></tr>`;
   $("#list").innerHTML = rows.length ? rows.map(r => `<div class="item">
-    <div class="l1">${badge(r.status)}<span class="cls">${esc(r.c)}</span><span class="sub">${esc(r.type.kind)}${r.type.where ? " · " + esc(r.type.where) : ""}</span><div class="name">${nameTxt(r)}</div></div>
+    <div class="l1">${badge(r.status)}<span class="cls">${esc(r.c)}</span><span class="sub">${esc(r.type.kind)}${r.type.where ? " · " + esc(r.type.where) : ""}</span><div class="name">${markBox(r)}${nameTxt(r)}</div></div>
     <div class="l2"><span>Due <b>${r.due ? fmtDay(r.due) + " " + fmtTime(r.due) : "n/a"}</b></span>
       <span>Turned in <b>${r.sub ? fmtDay(r.sub) + " " + fmtTime(r.sub) : r.status === "ok" || r.status === "late" ? (r.type.where && !/^Canvas/.test(r.type.where) ? "in " + esc(r.type.where) : "no date") : "n/a"}</b>${r.lateDays ? " " + lateTxt(r) + " late" : ""}</span>
       ${r.s != null || r.x ? `<span>Score <b>${scoreTxt(r)}</b></span>` : ""}</div>${markup ? `<div class="markup-gap"></div>` : ""}</div>`).join("") : `<div class="empty">Nothing matches these filters.</div>`;
@@ -419,16 +429,14 @@ function compactQueue(rows, numbered, markup) {
   const ticks = numbered && !markup;
   const head = `${numbered ? `<th class="r">#</th>` : ""}<th>Class</th><th class="n">Assignment</th>${numbered ? `<th class="r">Worth</th><th class="r opt">Credit</th><th class="r">Until</th>` : `<th class="r">Due</th>`}${ticks ? `<th>✓</th>` : ""}${markup ? `<th>Notes</th>` : ""}`;
   return `<table class="ct"><thead><tr>${head}</tr></thead><tbody>${rows.map(r => {
-    const until = r.until ? new Date(r.until) : null, done = doneKeys.has(r.key);
+    const until = r.until ? new Date(r.until) : null, done = !!(r.u && pend[r.u] && pend[r.u].done);
     return `<tr${done ? ` class="done"` : ""}>${numbered ? `<td class="k">${r.rank}</td>` : ""}<td class="c">${esc(r.c)}</td>
       <td class="n">${r.required ? `<span class="tag" title="Required to pass">REQ</span>` : ""}${nameLink(r.n, r.u)}</td>
       ${numbered ? `<td class="r">${pct(r.value)}%</td><td class="r opt">${Math.round(r.credit * 100)}%</td><td class="r${r.closing_soon ? " soon" : ""}">${until ? md(until) : "—"}</td>` : `<td class="r">${r.due ? md(new Date(r.due)) : "—"}</td>`}
-      ${ticks ? `<td><input type="checkbox" data-done="${esc(r.key)}" ${done ? "checked" : ""} aria-label="done"></td>` : ""}${markup ? `<td class="nt"></td>` : ""}</tr>`; }).join("")}</tbody></table>`;
+      ${ticks ? `<td>${r.u ? `<input type="checkbox" data-mark="${esc(r.u)}" ${done ? "checked" : ""} aria-label="done">` : ""}</td>` : ""}${markup ? `<td class="nt"></td>` : ""}</tr>`; }).join("")}</tbody></table>`;
 }
 
 // ---------- work queue ----------
-let doneKeys = new Set(); try { doneKeys = new Set(JSON.parse(localStorage.getItem("ccQueueDone") || "[]")); } catch (e) {}
-const saveDone = () => { try { localStorage.setItem("ccQueueDone", JSON.stringify([...doneKeys])); } catch (e) {} };
 const pct = v => v >= 1 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v > 0 ? "<0.1" : "0";
 function qItem(r, numbered) {
   const due = r.due ? new Date(r.due) : null, until = r.until ? new Date(r.until) : null;
@@ -436,18 +444,21 @@ function qItem(r, numbered) {
   const worth = r.verdict === "no" ? "" : `<span>Worth <b class="worth">≈${pct(r.value)}%</b> of ${esc(r.c === "Calc Lab" ? "MA2160" : r.c)}'s grade</span>`;
   const credit = r.verdict === "no" ? "" : `<span>Credit left <b>${Math.round(r.credit * 100)}%</b></span>`;
   const win = r.verdict !== "no" && until ? `<span>Late window <b>until ${fmtDay(until)} ${fmtTime(until)}</b></span>` : "";
-  const done = doneKeys.has(r.key);
+  const done = !!(r.u && pend[r.u] && pend[r.u].done);
   return `<div class="q${done ? " done" : ""}">${numbered ? `<div class="rk">${r.rank}</div>` : ""}<div>
     <div class="ttl"><span class="cls">${esc(r.c)}</span><span class="name">${r.u ? `<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.n)}</a>` : esc(r.n)}</span>${flags}
-      ${numbered ? `<label class="tick"><input type="checkbox" data-done="${esc(r.key)}" ${done ? "checked" : ""}> done</label>` : ""}</div>
+      ${numbered && r.u ? `<label class="tick"><input type="checkbox" data-mark="${esc(r.u)}" ${done ? "checked" : ""}> done</label>` : ""}</div>
     <div class="meta">${worth}${credit}<span>Was due <b>${due ? fmtDay(due) : "n/a"}</b> (${Math.round(r.days_late)}d ago)</span>${win}</div>
     <div class="why">${esc(r.why)}</div>${r.action ? `<div class="act">→ ${esc(r.action)}</div>` : ""}${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}
   </div></div>`;
 }
+const MARKABLE = ["due", "miss", "unk", "mark"];
+const markBox = r => r.u && MARKABLE.includes(r.status) ? `<label class="mk" title="Check off when it's done but Canvas doesn't show it yet"><input type="checkbox" data-mark="${esc(r.u)}" ${r.status === "mark" ? "checked" : ""}> done</label>` : "";
 function renderQueue() {
   const Q = (D.triage || []).filter(r => !st.cls || r.c === st.cls || (st.cls === "MA2160" && r.c === "Calc Lab"));
   const sure = Q.filter(r => r.verdict === "sure"), check = Q.filter(r => r.verdict === "check"), no = Q.filter(r => r.verdict === "no");
-  const open = sure.filter(r => !doneKeys.has(r.key));
+  const open = sure.filter(r => !(r.u && pend[r.u] && pend[r.u].done));
+  const waiting = ROWS.filter(r => r.status === "mark" && (!st.cls || r.c === st.cls));
   const C = !!st.compact, mk = document.body.classList.contains("markup");
   $("#queue").classList.toggle("ctq", C);
   $("#summary").innerHTML = `<b>${open.length} to do</b> <span class="badge s-ok"><span class="sym">✓</span>Can still earn points</span> ${sure.length}
@@ -460,6 +471,9 @@ function renderQueue() {
     (check.length ? `<h2>Ask or check first <span class="badge s-unk"><span class="sym">?</span>${check.length}</span></h2>
       <p class="lead">These might count. Each one says what to check. Do the quick check before spending time on the work.</p>
       ${C ? compactQueue(check, true, mk) : check.map(r => qItem(r, true)).join("")}` : "") +
+    (waiting.length ? `<h2>Marked done, waiting on Canvas <span class="badge s-ok"><span class="sym">☑</span>${waiting.length}</span></h2>
+      <p class="lead">Checked off here or in Discord. They stay off the lists and reports until Canvas shows them; uncheck one if it isn't actually done.</p>
+      ${waiting.map(r => `<div class="q done-wait"><div></div><div><div class="ttl"><span class="cls">${esc(r.c)}</span><span class="name">${nameTxt(r)}</span>${markBox(r)}</div></div></div>`).join("")}` : "") +
     (no.length ? `<details class="nope"><summary>Won't earn points: skip these (${no.length})</summary>
       <p class="lead">The syllabus rules these out. Only an excused absence or emergency would change that.</p>${C ? compactQueue(no, false, mk) : no.map(r => qItem(r, false)).join("")}</details>` : "");
 }
@@ -472,8 +486,9 @@ document.addEventListener("click", e => {
   const h = e.target.closest("[data-sort]"); if (h) { const k = h.dataset.sort; if (st.sort === k) st.dir = st.dir === "asc" ? "desc" : "asc"; else { st.sort = k; st.dir = ["due","sub","late"].includes(k) ? "desc" : "asc"; } return render(); }
 });
 $("#fClass").onchange = e => { st.cls = e.target.value; if (!st.queue) st.preset = "custom"; render(); };
-document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.done; if (!k) return;
-  e.target.checked ? doneKeys.add(k) : doneKeys.delete(k); saveDone(); render(); });
+document.addEventListener("change", e => { const u = e.target.dataset && e.target.dataset.mark; if (!u) return;
+  const it = D.items.find(i => i.u === u) || (D.triage || []).find(r => r.u === u) || {};
+  setMark(u, e.target.checked, it); });
 $("#fType").onchange = e => { st.type = e.target.value; st.preset = "custom"; render(); };
 $("#fRange").onchange = e => { st.range = e.target.value; if (st.preset !== "turnedin") st.preset = "custom"; render(); };
 $("#fFrom").onchange = e => { st.from = e.target.value; render(); };
@@ -526,18 +541,53 @@ async function loadData() {
   if (!r.ok) throw new Error(r.status === 401 ? "GitHub rejected the token. It may have expired." : r.status === 404 ? "No data yet. Run the coach once." : "GitHub said " + r.status);
   return r.json();
 }
-function boot(data) {
-  D = data; NOW = new Date(D.generated);
+function buildRows() {
   ROWS = D.items.map(i => {
     const r = {...i, due: i.due ? new Date(i.due) : null, sub: i.sub ? new Date(i.sub) : null, grd: i.grd ? new Date(i.grd) : null};
     r.status = statusOf(r, NOW); r.type = typeOf(r);
     r.lateDays = r.sub && r.due && r.sub > r.due ? (r.sub - r.due) / DAYMS : (r.status === "late" && r.due && !r.sub ? null : 0);
     return r;
   });
+}
+function migrateOldTicks() { // the queue's old checkboxes were only saved on this device: send them to the shared list once
+  let old = []; try { old = JSON.parse(localStorage.getItem("ccQueueDone") || "[]"); } catch (e) {}
+  if (!old.length) return;
+  for (const r of D.triage || []) if (old.includes(r.key) && r.u) setMark(r.u, true, {n: r.n, c: r.c}, true);
+  try { localStorage.removeItem("ccQueueDone"); } catch (e) {}
+}
+let outbox = {}, outT = null;
+function setMark(url, done, item, quiet) {
+  pend[url] = {done, at: Date.now()}; savePend();
+  outbox[url] = {url, done, name: (item && item.n) || "", course: (item && item.c) || "", by: "page"};
+  clearTimeout(outT); outT = setTimeout(sendMarks, 2500);
+  if (!quiet) { buildRows(); render(); }
+}
+async function sendMarks() {
+  const changes = Object.values(outbox); outbox = {};
+  if (!changes.length) return;
+  if (!conn.token) return toast("Unlock with your GitHub token first.");
+  try {
+    const r = await fetch(`https://api.github.com/repos/${conn.owner}/${conn.repo}/actions/workflows/mark-done.yml/dispatches`, {method:"POST",
+      headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer " + conn.token}, body: JSON.stringify({ref:"main", inputs:{changes: JSON.stringify(changes), refresh:"yes"}})});
+    if (r.status === 204) toast(`Saved ${changes.length} change${changes.length > 1 ? "s" : ""}. Reports and Coach pick it up in about a minute.`, 5000);
+    else if (r.status === 403 || r.status === 404) toast("Couldn't save: this GitHub token needs Actions: Read and write.", 8000);
+    else toast("Couldn't save (GitHub said " + r.status + "). Try again.", 6000);
+  } catch (e) { toast("Couldn't reach GitHub. Try again.", 6000); }
+}
+function boot(data) {
+  D = data; NOW = new Date(D.generated);
+  const byUrl = Object.fromEntries(D.items.filter(i => i.u).map(i => [i.u, i]));
+  for (const [u, p] of Object.entries(pend)) { // drop local pending marks once the shared data agrees (or after 2h)
+    const i = byUrl[u];
+    if (!i || Date.now() - p.at > 2 * 3600e3 || (p.done && (i.sd || canvasIn(i))) || (!p.done && !i.sd)) delete pend[u];
+  }
+  savePend();
+  migrateOldTicks();
+  buildRows();
   const classes = [...new Set(ROWS.map(r => r.c))].sort(), kinds = [...new Set(ROWS.map(r => r.type.kind))].sort();
   $("#fClass").innerHTML = `<option value="">All classes</option>` + classes.map(c => `<option>${esc(c)}</option>`).join("");
   $("#fType").innerHTML = `<option value="">All types</option>` + kinds.map(c => `<option>${esc(c)}</option>`).join("");
-  $("#statusChips").innerHTML = ["due","miss","late","ok","unk","exc"].map(s => `<button class="chip" data-status="${s}" title="${esc(STATUS[s].hint)}"><span aria-hidden="true">${STATUS[s].sym}</span> ${STATUS[s].label}</button>`).join("");
+  $("#statusChips").innerHTML = ["due","miss","late","ok","mark","unk","exc"].map(s => `<button class="chip" data-status="${s}" title="${esc(STATUS[s].hint)}"><span aria-hidden="true">${STATUS[s].sym}</span> ${STATUS[s].label}</button>`).join("");
   $("#asof").textContent = `From Canvas, ${NOW.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})}`;
   $("#login").hidden = true; $("#app").hidden = false;
   render();
