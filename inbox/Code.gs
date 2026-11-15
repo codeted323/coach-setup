@@ -1,8 +1,8 @@
 // Canvas Coach inbox helper. Runs in the student's own Google account.
 // - Every 15 minutes: sends the Coach bot recent inbox emails (sender, subject, short preview) and the next 14 days of calendar.
-// - Every minute: asks Coach if there's an inbox clean-up job (started from Discord), and does it:
+// - Every minute: asks Coach if there's an inbox clean-up job (started from the Email clean-up web page), and does it:
 //     scan = read sender/subject of inbox emails so Coach can propose a plan
-//     apply = add Coach/... labels, archive, star exactly what was approved in Discord
+//     apply = add Coach/... labels, archive, star exactly what was approved on the web page
 //     undo = reverse the last apply
 // It can label and archive. It cannot send email or permanently delete anything.
 // The shared secret lives in Project Settings > Script Properties as INBOX_SECRET (never in this code).

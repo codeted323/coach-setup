@@ -41,7 +41,7 @@ button,select,input{font:inherit;color:var(--ink)}
 .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;justify-content:space-between}
 h1{font-size:20px;margin:4px 0}
 .asof{color:var(--ink2);font-size:13px}
-.nav{font-size:13px;display:flex;gap:12px}
+.nav{font-size:13px;display:flex;gap:12px;flex-wrap:wrap}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
 .presets,.chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;line-height:1.2}
@@ -175,7 +175,7 @@ body.markup label.mk{display:none}
 <div class="wrap" id="app" hidden>
   <div class="top">
     <div><h1>Assignments</h1><div class="asof" id="asof"></div></div>
-    <div class="nav"><a href="dashboard.html">Dashboard</a><a href="./">Settings</a></div>
+    <div class="nav"><a href="dashboard.html">Dashboard</a><a href="inbox.html">Email clean-up</a><a href="location.html">Location</a><a href="./">Settings</a></div>
     <button class="btn" id="exitMarkup" hidden>Exit screenshot mode ✕</button>
   </div>
   <div class="filterline" id="filterline"></div>

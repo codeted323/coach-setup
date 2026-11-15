@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="darkreader-lock">
+<title>Location · Canvas Coach</title>
+<style>
+:root{
+  --bg:#f6f6f3;--card:#ffffff;--ink:#141413;--ink2:#4f4e4a;--ink3:#7a7974;--line:#e4e3de;--zebra:#fafaf8;--hover:#f0efea;
+  --accent:#1f6fd1;--accent-ink:#ffffff;--focus:#1f6fd1;
+  /* status: text color + soft fill. Each status also has its own symbol, so color is never the only cue. */
+  --due-fg:#1d5fb3;--due-bg:#e7f0fb;
+  --ok-fg:#18692b;--ok-bg:#e5f4e8;
+  --late-fg:#8a5300;--late-bg:#fdf1dc;
+  --miss-fg:#b02a2a;--miss-bg:#fbe7e6;
+  --exc-fg:#5d5c57;--exc-bg:#efeeea;
+  --unk-fg:#5d4a9e;--unk-bg:#efebfa;
+}
+@media (prefers-color-scheme: dark){ html[data-theme="auto"]{
+  --bg:#121212;--card:#1b1b1a;--ink:#ecebe6;--ink2:#bdbcb5;--ink3:#8d8c85;--line:#2e2e2b;--zebra:#1f1f1e;--hover:#262624;
+  --accent:#5b9cf0;--accent-ink:#0b1626;--focus:#7fb1f3;
+  --due-fg:#8dbdf5;--due-bg:#1a2b40;--ok-fg:#7fd18f;--ok-bg:#16301d;--late-fg:#f2c26b;--late-bg:#3a2c12;
+  --miss-fg:#ff9a94;--miss-bg:#3d1b1a;--exc-fg:#b3b2ab;--exc-bg:#2a2a28;--unk-fg:#b9a8f2;--unk-bg:#2a2540;}}
+html[data-theme="dark"]{
+  --bg:#121212;--card:#1b1b1a;--ink:#ecebe6;--ink2:#bdbcb5;--ink3:#8d8c85;--line:#2e2e2b;--zebra:#1f1f1e;--hover:#262624;
+  --accent:#5b9cf0;--accent-ink:#0b1626;--focus:#7fb1f3;
+  --due-fg:#8dbdf5;--due-bg:#1a2b40;--ok-fg:#7fd18f;--ok-bg:#16301d;--late-fg:#f2c26b;--late-bg:#3a2c12;
+  --miss-fg:#ff9a94;--miss-bg:#3d1b1a;--exc-fg:#b3b2ab;--exc-bg:#2a2a28;--unk-fg:#b9a8f2;--unk-bg:#2a2540;color-scheme:dark}
+html[data-theme="light"]{color-scheme:light}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:var(--ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1180px;margin:auto;padding:12px 12px 80px}
+.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;justify-content:space-between}
+h1{font-size:20px;margin:4px 0}
+.asof{color:var(--ink2);font-size:13px}
+.nav{font-size:13px;display:flex;gap:12px;flex-wrap:wrap}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+.presets,.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;line-height:1.2}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.preset{font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.row label{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:2px}
+select,input[type=search],input[type=date]{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:14px;min-height:34px}
+input[type=search]{min-width:180px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;min-height:34px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+
+.muted{color:var(--ink3);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:14px} th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--ink2);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.tile .big{font-size:24px;font-weight:700}
+.meter{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:6px;display:flex;gap:2px}
+.meter i{display:block;height:100%}
+.grid td.c{text-align:center;white-space:nowrap}
+.b{display:inline-flex;gap:4px;align-items:center;font-size:12.5px;font-weight:650;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b.ok{color:var(--ok-fg);background:var(--ok-bg)} .b.miss{color:var(--miss-fg);background:var(--miss-bg)}
+.b.soon{color:var(--due-fg);background:var(--due-bg)} .b.none{color:var(--exc-fg);background:var(--exc-bg)}
+</style></head>
+<body><div class="wrap">
+<div class="top"><h1>Location</h1><div class="nav"><a href="assignments.html">Assignments</a><a href="dashboard.html">Dashboard</a><a href="inbox.html">Email clean-up</a><a href="location.html">Location</a><a href="./">Settings</a></div></div>
+<div id="login" hidden></div><div id="app">
+<p class="asof" id="asof">Loading…</p>
+<div class="panel" id="phone"></div>
+<h2 style="font-size:16px;margin:16px 2px 6px">Class attendance</h2>
+<p class="muted" style="margin:0 2px 8px">From his OwnTracks check-ins. "Went" = his phone arrived at the class's building from an hour before class until it ended (or was already inside). A miss can also mean his phone's location was off.</p>
+<div class="tiles" id="tiles"></div>
+<div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Every class since tracking started</b>
+<label style="flex-direction:row;align-items:center;gap:6px">Show <select id="range"><option value="7">last 7 days</option><option value="14" selected>last 14 days</option><option value="9999">all</option></select></label></div>
+<div style="overflow-x:auto"><table class="grid"><thead><tr><th>Day</th><th>Class</th><th>Time</th><th>Where</th><th class="c">Went?</th><th>Arrived</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+<div class="panel"><b>Recent check-ins</b> <span class="muted">(arrive / leave events for the class buildings)</span>
+<table><tbody id="log"></tbody></table></div>
+</div></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const BOT = "https://coach-bot.ted323-aa5.workers.dev";
+let conn = {}; try { conn = JSON.parse(localStorage.getItem("canvasCoachConn") || "{}"); } catch (e) {}
+let theme = "auto"; try { theme = localStorage.getItem("ccTheme") || "auto"; } catch (e) {}
+document.documentElement.dataset.theme = theme;
+async function bot(path, body) {
+  const r = await fetch(BOT + path, { method: body ? "POST" : "GET", headers: { Authorization: "Bearer " + conn.token, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin("That token didn't work. Use the same GitHub token as the Assignments page."); throw new Error("401"); }
+  if (!r.ok) throw new Error(j.error || ("Error " + r.status));
+  return j;
+}
+async function gh(path) {
+  const r = await fetch(`https://api.github.com/repos/${conn.owner || "codeted323"}/${conn.repo || "canvas-coach"}/contents/${path}?t=${Date.now()}`, { headers: { Accept: "application/vnd.github.raw+json", Authorization: "Bearer " + conn.token }, cache: "no-store" });
+  if (!r.ok) throw new Error("GitHub " + r.status);
+  return r.json();
+}
+const ago = iso => { if (!iso) return "never"; const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; };
+function showLogin(msg) {
+  $("#app").hidden = true; const L = $("#login"); L.hidden = false;
+  L.innerHTML = `<div class="panel"><p class="asof">Unlock with the same GitHub token as the Assignments page.</p>
+  <label class="legend">Fine-grained token</label><input id="gT" type="password" style="width:100%;margin:4px 0">
+  <label class="legend" style="display:block;margin:4px 0 10px"><input type="checkbox" id="gM" checked> Remember on this device</label>
+  <button class="btn primary" id="gGo">Unlock</button><p style="color:var(--miss-fg);font-size:14px">${esc(msg || "")}</p></div>`;
+  $("#gGo").onclick = () => { conn = { owner: conn.owner || "codeted323", repo: conn.repo || "canvas-coach", token: $("#gT").value.trim() };
+    try { localStorage.setItem("canvasCoachConn", JSON.stringify($("#gM").checked ? conn : { owner: conn.owner, repo: conn.repo })); } catch (e) {}
+    $("#login").hidden = true; $("#app").hidden = false; start(); };
+}
+
+const TZ = "America/Detroit";
+const DOW = ["sun","mon","tue","wed","thu","fri","sat"];
+const ymd = d => d.toLocaleDateString("en-CA", { timeZone: TZ });
+const fmtD = d => d.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short", month: "short", day: "numeric" });
+const fmtT = d => d.toLocaleTimeString(undefined, { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+// local wall time in Houghton -> Date
+function at(dateStr, hm) {
+  const [y, mo, d] = dateStr.split("-").map(Number), [h, m] = hm.split(":").map(Number);
+  const guess = new Date(Date.UTC(y, mo - 1, d, h, m));
+  const off = new Date(guess.toLocaleString("en-US", { timeZone: TZ })) - new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
+  return new Date(guess.getTime() - off);
+}
+function build(cfg, visits) {
+  const classes = ((cfg.study || {}).classes || []).filter(c => c.building);
+  const off = (cfg.study || {}).no_class_dates || [];
+  const isOff = ds => off.some(([a, b]) => ds >= a && ds <= (b || a));
+  const v = visits.map(x => ({ ...x, t: new Date(x.at) })).sort((a, b) => a.t - b.t);
+  const now = new Date(), out = [];
+  if (!v.length) return out;
+  const first = new Date(v[0].t); first.setHours(0, 0, 0, 0);
+  for (let d = new Date(first); d <= now; d.setDate(d.getDate() + 1)) {
+    const ds = ymd(d), dow = DOW[new Date(at(ds, "12:00").toLocaleString("en-US", { timeZone: TZ })).getDay()];
+    if (isOff(ds)) continue;
+    for (const c of classes) {
+      if (!c.days.includes(dow)) continue;
+      const st = at(ds, c.start), en = at(ds, c.end);
+      if (st < v[0].t) continue; // before tracking began
+      let status, arrived = null;
+      const hit = v.find(x => x.place === c.building && x.event === "enter" && x.t >= new Date(st - 3600000) && x.t <= en);
+      const before = v.filter(x => x.place === c.building && x.t < st).pop();
+      if (hit) { status = "ok"; arrived = hit.t; }
+      else if (before && before.event === "enter" && st - before.t < 12 * 3600000) { status = "ok"; arrived = before.t; }
+      else if (st > now) status = "soon";
+      else if (now < new Date(st.getTime() + 15 * 60000)) status = "soon";
+      else status = "miss";
+      out.push({ ds, st, en, c, status, arrived });
+    }
+  }
+  return out.sort((a, b) => b.st - a.st);
+}
+let ALL = [];
+function render() {
+  const days = Number($("#range").value), cut = new Date(Date.now() - days * 86400000);
+  const rows = ALL.filter(r => r.st >= cut);
+  const B = { ok: '<span class="b ok">✓ Went</span>', miss: '<span class="b miss">✗ No check-in</span>', soon: '<span class="b soon">… Not yet</span>' };
+  $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td>${fmtD(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
+    <td class="c">${B[r.status]}</td><td>${r.arrived ? fmtT(r.arrived) + (r.arrived > r.st ? ` <span class="muted">(${Math.round((r.arrived - r.st) / 60000)} min late)</span>` : "") : ""}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="muted">No classes tracked in this range yet.</td></tr>`;
+}
+async function start() {
+  if (!conn.token) return showLogin();
+  try {
+    const [cfg, w] = await Promise.all([gh("config.json"), bot("/web/visits")]);
+    ALL = build(cfg, w.visits || []);
+    $("#asof").textContent = "Updated " + new Date().toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+    const last = w.otLast && w.otLast.at, hrs = last ? (Date.now() - new Date(last)) / 3600000 : 1e9;
+    $("#phone").innerHTML = hrs < 24 ? `<span style="color:var(--ok-fg)">✓</span> His phone last reached Coach ${ago(last)}.`
+      : `<span style="color:var(--late-fg)">⚠</span> His phone hasn't reached Coach ${last ? "since " + ago(last) : "yet"}. If OwnTracks is closed or location is off, classes will show as "No check-in" even if he went.`;
+    const courses = [...new Set(ALL.map(r => r.c.course))].sort();
+    $("#tiles").innerHTML = courses.length ? courses.map(cn => {
+      const r = ALL.filter(x => x.c.course === cn && x.status !== "soon"), ok = r.filter(x => x.status === "ok").length, n = r.length;
+      return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? ok + "/" + n : "–"}</div><div class="muted">${n ? Math.round(100 * ok / n) + "% checked in" : "no classes yet"}</div>
+      <div class="meter" role="img" aria-label="${ok} of ${n}"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * (n - ok) / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
+      : `<div class="muted">No class check-ins yet. They start the first time his phone enters a class building.</div>`;
+    const log = (w.visits || []).slice(-40).reverse();
+    $("#log").innerHTML = log.length ? log.map(x => `<tr><td>${fmtD(new Date(x.at))} ${fmtT(new Date(x.at))}</td><td>${x.event === "enter" ? "→ arrived" : "← left"}</td><td>${esc(x.place)}</td></tr>`).join("") : `<tr><td class="muted">None yet.</td></tr>`;
+    $("#range").onchange = render; render();
+  } catch (e) { if (e.message !== "401") $("#asof").textContent = "Couldn't load: " + e.message; }
+}
+start();
+</script></body></html>
