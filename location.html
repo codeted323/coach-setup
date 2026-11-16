@@ -64,7 +64,7 @@ th{font-size:12px;color:var(--ink2);font-weight:600}
 .grid td.c{text-align:center;white-space:nowrap}
 .b{display:inline-flex;gap:4px;align-items:center;font-size:12.5px;font-weight:650;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .b.ok{color:var(--ok-fg);background:var(--ok-bg)} .b.miss{color:var(--miss-fg);background:var(--miss-bg)}
-.b.soon{color:var(--due-fg);background:var(--due-bg)} .b.none{color:var(--exc-fg);background:var(--exc-bg)}
+.b.soon{color:var(--due-fg);background:var(--due-bg)} .b.late{color:var(--late-fg);background:var(--late-bg)} .b.none{color:var(--exc-fg);background:var(--exc-bg)}
 </style></head>
 <body><div class="wrap">
 <div class="top"><h1>Location</h1><div class="nav"><a href="assignments.html">Assignments</a><a href="dashboard.html">Dashboard</a><a href="inbox.html">Email clean-up</a><a href="location.html">Location</a><a href="./">Settings</a></div></div>
@@ -72,11 +72,11 @@ th{font-size:12px;color:var(--ink2);font-weight:600}
 <p class="asof" id="asof">Loading…</p>
 <div class="panel" id="phone"></div>
 <h2 style="font-size:16px;margin:16px 2px 6px">Class attendance</h2>
-<p class="muted" style="margin:0 2px 8px">From his OwnTracks check-ins. "Went" = his phone arrived at the class's building from an hour before class until it ended (or was already inside). A miss can also mean his phone's location was off.</p>
+<p class="muted" style="margin:0 2px 8px">From his OwnTracks check-ins. Checked at the minute class starts, then 5, 10 and 30 minutes after. "On time" = his phone was inside the building at the start. "No phone data" = his phone sent nothing around that class, so we can't tell.</p>
 <div class="tiles" id="tiles"></div>
 <div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Every class since tracking started</b>
 <label style="flex-direction:row;align-items:center;gap:6px">Show <select id="range"><option value="7">last 7 days</option><option value="14" selected>last 14 days</option><option value="9999">all</option></select></label></div>
-<div style="overflow-x:auto"><table class="grid"><thead><tr><th>Day</th><th>Class</th><th>Time</th><th>Where</th><th class="c">Went?</th><th>Arrived</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+<div style="overflow-x:auto"><table class="grid"><thead><tr><th>Day</th><th>Class</th><th>Time</th><th>Where</th><th class="c">There?</th><th>In building since</th></tr></thead><tbody id="rows"></tbody></table></div></div>
 <div class="panel"><b>Recent check-ins</b> <span class="muted">(arrive / leave events for the class buildings)</span>
 <table><tbody id="log"></tbody></table></div>
 </div></div>
@@ -123,30 +123,56 @@ function at(dateStr, hm) {
   const off = new Date(guess.toLocaleString("en-US", { timeZone: TZ })) - new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
   return new Date(guess.getTime() - off);
 }
-function build(cfg, visits) {
+// Was he inside building B at moment T? Uses the latest evidence from the 3 hours before T:
+// arrive/leave events, arriving somewhere else, and plain location pings (in or out of the building's circle).
+function stateAt(B, T, ev, places) {
+  const P = places[B];
+  let last = null;
+  for (const e of ev) {
+    if (e.t > T) break;
+    if (T - e.t > 3 * 3600000) continue;
+    let inside = null;
+    if (e.k === "enter") inside = e.place === B;
+    else if (e.k === "leave") { if (e.place === B) inside = false; }
+    else if (e.k === "ping") {
+      if ((e.in || []).includes(B)) inside = true;
+      else if (P && e.lat != null) { const d = dist(e, P); if (d <= P.rad) inside = true; else if (d > P.rad + Math.min(e.acc || 0, 150)) inside = false; }
+    }
+    if (inside !== null) last = { inside, t: e.t, since: inside ? (last && last.inside ? last.since : e.t) : null };
+  }
+  return last;
+}
+function dist(a, b) { const R = 6371000, r = x => x * Math.PI / 180, dLa = r(b.lat - a.lat), dLo = r(b.lon - a.lon);
+  return 2 * R * Math.asin(Math.sqrt(Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLo / 2) ** 2)); }
+const CHECKS = [0, 5, 10, 30]; // minutes after class starts
+function build(cfg, visits, pings) {
   const classes = ((cfg.study || {}).classes || []).filter(c => c.building);
+  const places = cfg.places || {};
   const off = (cfg.study || {}).no_class_dates || [];
   const isOff = ds => off.some(([a, b]) => ds >= a && ds <= (b || a));
-  const v = visits.map(x => ({ ...x, t: new Date(x.at) })).sort((a, b) => a.t - b.t);
+  const ev = [...visits.map(x => ({ k: x.event, place: x.place, t: new Date(x.at) })), ...(pings || []).map(x => ({ k: "ping", ...x, t: new Date(x.at) }))].sort((a, b) => a.t - b.t);
   const now = new Date(), out = [];
-  if (!v.length) return out;
-  const first = new Date(v[0].t); first.setHours(0, 0, 0, 0);
-  for (let d = new Date(first); d <= now; d.setDate(d.getDate() + 1)) {
-    const ds = ymd(d), dow = DOW[new Date(at(ds, "12:00").toLocaleString("en-US", { timeZone: TZ })).getDay()];
-    if (isOff(ds)) continue;
+  if (!ev.length) return out;
+  const firstDay = ymd(ev[0].t);
+  for (let d = new Date(ev[0].t.getTime() - 86400000); d <= now; d.setDate(d.getDate() + 1)) {
+    const ds = ymd(d); if (ds < firstDay || isOff(ds)) continue;
+    const dow = DOW[new Date(at(ds, "12:00").toLocaleString("en-US", { timeZone: TZ })).getDay()];
     for (const c of classes) {
       if (!c.days.includes(dow)) continue;
       const st = at(ds, c.start), en = at(ds, c.end);
-      if (st < v[0].t) continue; // before tracking began
-      let status, arrived = null;
-      const hit = v.find(x => x.place === c.building && x.event === "enter" && x.t >= new Date(st - 3600000) && x.t <= en);
-      const before = v.filter(x => x.place === c.building && x.t < st).pop();
-      if (hit) { status = "ok"; arrived = hit.t; }
-      else if (before && before.event === "enter" && st - before.t < 12 * 3600000) { status = "ok"; arrived = before.t; }
-      else if (st > now) status = "soon";
-      else if (now < new Date(st.getTime() + 15 * 60000)) status = "soon";
-      else status = "miss";
-      out.push({ ds, st, en, c, status, arrived });
+      if (out.some(r => r.ds === ds && r.c === c)) continue;
+      let status = null, arrived = null, late = 0;
+      for (const m of CHECKS) {
+        const T = new Date(st.getTime() + m * 60000);
+        if (T > now) { status = m === 0 ? "soon" : "checking"; break; }
+        const sAt = stateAt(c.building, T, ev, places);
+        if (sAt && sAt.inside) { status = m === 0 ? "ok" : "late"; late = m; arrived = sAt.since; break; }
+      }
+      if (!status) {
+        const near = ev.some(e => Math.abs(e.t - st) <= 45 * 60000);
+        status = near ? "miss" : "none";
+      }
+      out.push({ ds, st, en, c, status, arrived, late });
     }
   }
   return out.sort((a, b) => b.st - a.st);
@@ -155,25 +181,28 @@ let ALL = [];
 function render() {
   const days = Number($("#range").value), cut = new Date(Date.now() - days * 86400000);
   const rows = ALL.filter(r => r.st >= cut);
-  const B = { ok: '<span class="b ok">✓ Went</span>', miss: '<span class="b miss">✗ No check-in</span>', soon: '<span class="b soon">… Not yet</span>' };
+  const B = { ok: '<span class="b ok">✓ On time</span>', late: r => `<span class="b late">◔ ${r.late}+ min late</span>`, miss: '<span class="b miss">✗ Not there</span>',
+    none: '<span class="b none">? No phone data</span>', soon: '<span class="b soon">… Not yet</span>', checking: '<span class="b soon">… Checking</span>' };
   $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td>${fmtD(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
-    <td class="c">${B[r.status]}</td><td>${r.arrived ? fmtT(r.arrived) + (r.arrived > r.st ? ` <span class="muted">(${Math.round((r.arrived - r.st) / 60000)} min late)</span>` : "") : ""}</td></tr>`).join("")
+    <td class="c">${typeof B[r.status] === "function" ? B[r.status](r) : B[r.status]}</td><td>${r.arrived ? fmtT(r.arrived) : ""}</td></tr>`).join("")
     : `<tr><td colspan="6" class="muted">No classes tracked in this range yet.</td></tr>`;
 }
 async function start() {
   if (!conn.token) return showLogin();
   try {
     const [cfg, w] = await Promise.all([gh("config.json"), bot("/web/visits")]);
-    ALL = build(cfg, w.visits || []);
+    ALL = build(cfg, w.visits || [], w.pings || []);
     $("#asof").textContent = "Updated " + new Date().toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
     const last = w.otLast && w.otLast.at, hrs = last ? (Date.now() - new Date(last)) / 3600000 : 1e9;
     $("#phone").innerHTML = hrs < 24 ? `<span style="color:var(--ok-fg)">✓</span> His phone last reached Coach ${ago(last)}.`
       : `<span style="color:var(--late-fg)">⚠</span> His phone hasn't reached Coach ${last ? "since " + ago(last) : "yet"}. If OwnTracks is closed or location is off, classes will show as "No check-in" even if he went.`;
     const courses = [...new Set(ALL.map(r => r.c.course))].sort();
     $("#tiles").innerHTML = courses.length ? courses.map(cn => {
-      const r = ALL.filter(x => x.c.course === cn && x.status !== "soon"), ok = r.filter(x => x.status === "ok").length, n = r.length;
-      return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? ok + "/" + n : "–"}</div><div class="muted">${n ? Math.round(100 * ok / n) + "% checked in" : "no classes yet"}</div>
-      <div class="meter" role="img" aria-label="${ok} of ${n}"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * (n - ok) / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
+      const r = ALL.filter(x => x.c.course === cn && !["soon", "checking"].includes(x.status));
+      const cnt = k => r.filter(x => x.status === k).length, ok = cnt("ok"), late = cnt("late"), miss = cnt("miss"), none = cnt("none"), n = ok + late + miss;
+      return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? (ok + late) + "/" + n : "–"}</div>
+      <div class="muted">${n ? `${ok} on time · ${late} late · ${miss} not there` : "no classes with phone data yet"}${none ? ` · ${none} no data` : ""}</div>
+      <div class="meter" role="img" aria-label="${ok} on time, ${late} late, ${miss} not there"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * late / n : 0}%;background:var(--late-fg)"></i><i style="width:${n ? 100 * miss / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
       : `<div class="muted">No class check-ins yet. They start the first time his phone enters a class building.</div>`;
     const log = (w.visits || []).slice(-40).reverse();
     $("#log").innerHTML = log.length ? log.map(x => `<tr><td>${fmtD(new Date(x.at))} ${fmtT(new Date(x.at))}</td><td>${x.event === "enter" ? "→ arrived" : "← left"}</td><td>${esc(x.place)}</td></tr>`).join("") : `<tr><td class="muted">None yet.</td></tr>`;
