@@ -59,6 +59,8 @@ th{font-size:12px;color:var(--ink2);font-weight:600}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .tile .big{font-size:24px;font-weight:700}
+.tile .one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.grid td.d{white-space:nowrap;line-height:1.3}
 .meter{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:6px;display:flex;gap:2px}
 .meter i{display:block;height:100%}
 .grid td.c{text-align:center;white-space:nowrap}
@@ -69,13 +71,15 @@ th{font-size:12px;color:var(--ink2);font-weight:600}
 <body><div class="wrap">
 <div class="top"><h1>Location</h1><div class="nav"><a href="assignments.html">Assignments</a><a href="dashboard.html">Dashboard</a><a href="inbox.html">Email clean-up</a><a href="location.html">Location</a><a href="./">Settings</a></div></div>
 <div id="login" hidden></div><div id="app">
-<p class="asof" id="asof">Loading…</p>
-<div class="panel" id="phone"></div>
-<h2 style="font-size:16px;margin:16px 2px 6px">Class attendance</h2>
-<p class="muted" style="margin:0 2px 8px">From his OwnTracks check-ins. Checked at the minute class starts, then 5, 10 and 30 minutes after. "On time" = his phone was inside the building at the start. "No phone data" = his phone sent nothing around that class, so we can't tell.</p>
+<p class="asof" id="asof" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:4px 2px">Loading…</p>
+<div class="row" style="margin:6px 2px 4px"><label style="flex-direction:row;align-items:center;gap:6px;font-size:14px;color:var(--ink2)">Show <select id="range">
+<option value="today">today</option><option value="week" selected>this week (Mon–Fri)</option><option value="7">last 7 days</option><option value="14">last 14 days</option><option value="9999">all</option></select></label></div>
+<div style="position:relative"><h2 style="font-size:16px;margin:12px 2px 8px;display:flex;align-items:center;gap:6px">Class attendance
+<button id="infoBtn" class="btn" aria-label="How attendance is worked out" aria-expanded="false" style="min-height:0;padding:0 7px;border-radius:999px;font-size:13px;line-height:20px">i</button></h2>
+<div id="info" class="panel" hidden style="position:absolute;z-index:5;top:34px;left:0;right:0;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:13px;color:var(--ink2)">
+From his OwnTracks check-ins. Checked at the minute class starts, then 5, 10 and 30 minutes after. "On time" = his phone was inside the building at the start. "No phone data" = his phone sent nothing around that class, so we can't tell.</div></div>
 <div class="tiles" id="tiles"></div>
-<div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Every class since tracking started</b>
-<label style="flex-direction:row;align-items:center;gap:6px">Show <select id="range"><option value="7">last 7 days</option><option value="14" selected>last 14 days</option><option value="9999">all</option></select></label></div>
+<div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Journal</b></div>
 <div style="overflow-x:auto"><table class="grid"><thead><tr><th>Day</th><th>Class</th><th>Time</th><th>Where</th><th class="c">There?</th><th>In building since</th></tr></thead><tbody id="rows"></tbody></table></div></div>
 <div class="panel"><b>Recent check-ins</b> <span class="muted">(arrive / leave events for the class buildings)</span>
 <table><tbody id="log"></tbody></table></div>
@@ -114,6 +118,8 @@ function showLogin(msg) {
 const TZ = "America/Detroit";
 const DOW = ["sun","mon","tue","wed","thu","fri","sat"];
 const ymd = d => d.toLocaleDateString("en-CA", { timeZone: TZ });
+const fmtWd = d => d.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short" });
+const fmtMd = d => d.toLocaleDateString(undefined, { timeZone: TZ, month: "numeric", day: "numeric" });
 const fmtD = d => d.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short", month: "short", day: "numeric" });
 const fmtT = d => d.toLocaleTimeString(undefined, { timeZone: TZ, hour: "numeric", minute: "2-digit" });
 // local wall time in Houghton -> Date
@@ -144,12 +150,15 @@ function stateAt(B, T, ev, places) {
 }
 function dist(a, b) { const R = 6371000, r = x => x * Math.PI / 180, dLa = r(b.lat - a.lat), dLo = r(b.lon - a.lon);
   return 2 * R * Math.asin(Math.sqrt(Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLo / 2) ** 2)); }
-const CHECKS = [0, 5, 10, 30]; // minutes after class starts
+const CHECKS = [0, 5, 10, 30];
+const TRACK_FROM = "2026-11-17"; // Monday Nov 16 was before Move mode was on, so it's left out // minutes after class starts
 function build(cfg, visits, pings) {
   const classes = ((cfg.study || {}).classes || []).filter(c => c.building);
   const places = cfg.places || {};
   const off = (cfg.study || {}).no_class_dates || [];
   const isOff = ds => off.some(([a, b]) => ds >= a && ds <= (b || a));
+  const from = at(TRACK_FROM, "00:00");
+  visits = visits.filter(x => new Date(x.at) >= from); pings = (pings || []).filter(x => new Date(x.at) >= from);
   const ev = [...visits.map(x => ({ k: x.event, place: x.place, t: new Date(x.at) })), ...(pings || []).map(x => ({ k: "ping", ...x, t: new Date(x.at) }))].sort((a, b) => a.t - b.t);
   const now = new Date(), out = [];
   if (!ev.length) return out;
@@ -178,35 +187,45 @@ function build(cfg, visits, pings) {
   return out.sort((a, b) => b.st - a.st);
 }
 let ALL = [];
+function rangeStart() {
+  const v = $("#range").value, today = ymd(new Date());
+  if (v === "today") return at(today, "00:00");
+  if (v === "week") { const d = new Date(at(today, "12:00").toLocaleString("en-US", { timeZone: TZ })).getDay(); const m = new Date(at(today, "12:00").getTime() - ((d + 6) % 7) * 86400000); return at(ymd(m), "00:00"); }
+  return new Date(Date.now() - Number(v) * 86400000);
+}
 function render() {
-  const days = Number($("#range").value), cut = new Date(Date.now() - days * 86400000);
-  const rows = ALL.filter(r => r.st >= cut);
-  const B = { ok: '<span class="b ok">✓ On time</span>', late: r => `<span class="b late">◔ ${r.late}+ min late</span>`, miss: '<span class="b miss">✗ Not there</span>',
+  const cut = rangeStart(), rows = ALL.filter(r => r.st >= cut);
+  const B = { ok: '<span class="b ok">✓ On time</span>', late: r => `<span class="b late">◔ ${r.late}+ min late</span>`, miss: '<span class="b miss">✗ No-show</span>',
     none: '<span class="b none">? No phone data</span>', soon: '<span class="b soon">… Not yet</span>', checking: '<span class="b soon">… Checking</span>' };
-  $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td>${fmtD(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
+  const courses = [...new Set(ALL.map(r => r.c.course))].sort();
+  $("#tiles").innerHTML = courses.length ? courses.map(cn => {
+    const r = rows.filter(x => x.c.course === cn && !["soon", "checking"].includes(x.status));
+    const cnt = k => r.filter(x => x.status === k).length, ok = cnt("ok"), late = cnt("late"), miss = cnt("miss"), none = cnt("none"), n = ok + late + miss;
+    return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? (ok + late) + "/" + n : "–"}</div>
+    <div class="muted one">${n ? `${ok} on time · ${late} late · ${miss} no-show` : "no classes with phone data"}</div>${none ? `<div class="muted one">${none} with no phone data</div>` : ""}
+    <div class="meter" role="img" aria-label="${ok} on time, ${late} late, ${miss} no-show"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * late / n : 0}%;background:var(--late-fg)"></i><i style="width:${n ? 100 * miss / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
+    : `<div class="muted">No class check-ins yet.</div>`;
+  $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td class="d">${fmtWd(r.st)}<br>${fmtMd(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
     <td class="c">${typeof B[r.status] === "function" ? B[r.status](r) : B[r.status]}</td><td>${r.arrived ? fmtT(r.arrived) : ""}</td></tr>`).join("")
-    : `<tr><td colspan="6" class="muted">No classes tracked in this range yet.</td></tr>`;
+    : `<tr><td colspan="6" class="muted">No classes in this range yet.</td></tr>`;
 }
 async function start() {
   if (!conn.token) return showLogin();
   try {
     const [cfg, w] = await Promise.all([gh("config.json"), bot("/web/visits")]);
     ALL = build(cfg, w.visits || [], w.pings || []);
-    $("#asof").textContent = "Updated " + new Date().toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
     const last = w.otLast && w.otLast.at, hrs = last ? (Date.now() - new Date(last)) / 3600000 : 1e9;
-    $("#phone").innerHTML = hrs < 24 ? `<span style="color:var(--ok-fg)">✓</span> His phone last reached Coach ${ago(last)}.`
-      : `<span style="color:var(--late-fg)">⚠</span> His phone hasn't reached Coach ${last ? "since " + ago(last) : "yet"}. If OwnTracks is closed or location is off, classes will show as "No check-in" even if he went.`;
-    const courses = [...new Set(ALL.map(r => r.c.course))].sort();
-    $("#tiles").innerHTML = courses.length ? courses.map(cn => {
-      const r = ALL.filter(x => x.c.course === cn && !["soon", "checking"].includes(x.status));
-      const cnt = k => r.filter(x => x.status === k).length, ok = cnt("ok"), late = cnt("late"), miss = cnt("miss"), none = cnt("none"), n = ok + late + miss;
-      return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? (ok + late) + "/" + n : "–"}</div>
-      <div class="muted">${n ? `${ok} on time · ${late} late · ${miss} not there` : "no classes with phone data yet"}${none ? ` · ${none} no data` : ""}</div>
-      <div class="meter" role="img" aria-label="${ok} on time, ${late} late, ${miss} not there"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * late / n : 0}%;background:var(--late-fg)"></i><i style="width:${n ? 100 * miss / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
-      : `<div class="muted">No class check-ins yet. They start the first time his phone enters a class building.</div>`;
-    const log = (w.visits || []).slice(-40).reverse();
+    const upd = "Updated " + new Date().toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+    $("#asof").innerHTML = `${upd} · ` + (hrs < 24 ? `<span style="color:var(--ok-fg)">✓</span> His phone last reached Coach ${ago(last)}.`
+      : `<span style="color:var(--late-fg)">⚠</span> His phone hasn't reached Coach ${last ? "since " + ago(last) : "yet"} (OwnTracks closed or location off?)`);
+    $("#asof").title = $("#asof").textContent;
+    const from = at(TRACK_FROM, "00:00");
+    const log = (w.visits || []).filter(x => new Date(x.at) >= from).slice(-40).reverse();
     $("#log").innerHTML = log.length ? log.map(x => `<tr><td>${fmtD(new Date(x.at))} ${fmtT(new Date(x.at))}</td><td>${x.event === "enter" ? "→ arrived" : "← left"}</td><td>${esc(x.place)}</td></tr>`).join("") : `<tr><td class="muted">None yet.</td></tr>`;
     $("#range").onchange = render; render();
+    const I = $("#info"), btn = $("#infoBtn");
+    btn.onclick = e => { e.stopPropagation(); I.hidden = !I.hidden; btn.setAttribute("aria-expanded", String(!I.hidden)); };
+    document.addEventListener("click", e => { if (!I.hidden && !I.contains(e.target)) { I.hidden = true; btn.setAttribute("aria-expanded", "false"); } });
   } catch (e) { if (e.message !== "401") $("#asof").textContent = "Couldn't load: " + e.message; }
 }
 start();
