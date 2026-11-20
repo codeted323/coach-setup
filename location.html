@@ -77,7 +77,10 @@ th{font-size:12px;color:var(--ink2);font-weight:600}
 <div style="position:relative"><h2 style="font-size:16px;margin:12px 2px 8px;display:flex;align-items:center;gap:6px">Class attendance
 <button id="infoBtn" aria-label="How attendance is worked out" aria-expanded="false" style="width:18px;height:18px;min-height:0;padding:0;border-radius:50%;border:1.5px solid var(--ink3);background:transparent;color:var(--ink2);font:700 11px/1 Georgia,serif;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none">i</button></h2>
 <div id="info" class="panel" hidden style="position:absolute;z-index:5;top:34px;left:0;right:0;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:13px;color:var(--ink2)">
-From his OwnTracks check-ins. Checked at the minute class starts, then 5, 10 and 30 minutes after. "On time" = his phone was inside the building at the start. "No phone data" = his phone sent nothing around that class, so we can't tell.</div></div>
+From his OwnTracks reports. Checked at the minute class starts, then 5, 10 and 30 minutes after.<br>
+<b>On time</b>: his phone was inside the building at the start. <b>Late</b>: first seen inside at the 5, 10 or 30 minute check.<br>
+<b>No-show</b>: his phone was reporting, but not from the building, through the 30 minute check.<br>
+<b>Unknown</b>: his phone sent nothing for 20+ minutes around the check (location off, phone off or dead, or OwnTracks closed), so we can't tell. Unknowns don't count against him in the scores.</div></div>
 <div class="tiles" id="tiles"></div>
 <div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Journal</b></div>
 <div style="overflow-x:auto"><table class="grid"><thead><tr><th>Day</th><th>Class</th><th>Time</th><th>Where</th><th class="c">There?</th><th>Since</th></tr></thead><tbody id="rows"></tbody></table></div></div>
@@ -129,24 +132,29 @@ function at(dateStr, hm) {
   const off = new Date(guess.toLocaleString("en-US", { timeZone: TZ })) - new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
   return new Date(guess.getTime() - off);
 }
-// Was he inside building B at moment T? Uses the latest evidence from the 3 hours before T:
-// arrive/leave events, arriving somewhere else, and plain location pings (in or out of the building's circle).
+// Was he inside building B at moment T? Answers "in", "out" or "unknown".
+// His phone (OwnTracks Move mode, 10-min timer) reports at least every 10 minutes, so no report at all in the
+// 20 minutes before T means the phone wasn't reporting (location off, phone off/dead, app force-closed): unknown.
+const FRESH = 20 * 60000;
+function inside(e, B, P) {
+  if (e.k === "enter") return e.place === B;
+  if (e.k === "leave") return e.place === B ? false : null;
+  if ((e.in || []).includes(B)) return true;
+  if (P && e.lat != null) { const d = dist(e, P); if (d <= P.rad) return true; return false; }
+  return null;
+}
 function stateAt(B, T, ev, places) {
   const P = places[B];
-  let last = null;
-  for (const e of ev) {
-    if (e.t > T) break;
-    if (T - e.t > 3 * 3600000) continue;
-    let inside = null;
-    if (e.k === "enter") inside = e.place === B;
-    else if (e.k === "leave") { if (e.place === B) inside = false; }
-    else if (e.k === "ping") {
-      if ((e.in || []).includes(B)) inside = true;
-      else if (P && e.lat != null) { const d = dist(e, P); if (d <= P.rad) inside = true; else if (d > P.rad + Math.min(e.acc || 0, 150)) inside = false; }
-    }
-    if (inside !== null) last = { inside, t: e.t, since: inside ? (last && last.inside ? last.since : e.t) : null };
-  }
-  return last;
+  const recent = ev.filter(e => e.t <= T && T - e.t <= FRESH);
+  if (!recent.length) return { s: "unknown" };
+  // latest decisive report wins; a report that can't tell (poor accuracy, other building's leave) still proves the phone was on
+  let s = "out";
+  for (const e of recent) { const v = inside(e, B, P); if (v !== null) s = v ? "in" : "out"; }
+  if (s !== "in") return { s };
+  // when did this stay start? walk back through earlier reports until one says he wasn't there
+  let since = T;
+  for (const e of ev.filter(x => x.t <= T && T - x.t <= 3 * 3600000).reverse()) { const v = inside(e, B, P); if (v === false) break; if (v === true) since = e.t; }
+  return { s, since };
 }
 function dist(a, b) { const R = 6371000, r = x => x * Math.PI / 180, dLa = r(b.lat - a.lat), dLo = r(b.lon - a.lon);
   return 2 * R * Math.asin(Math.sqrt(Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLo / 2) ** 2)); }
@@ -170,17 +178,16 @@ function build(cfg, visits, pings) {
       if (!c.days.includes(dow)) continue;
       const st = at(ds, c.start), en = at(ds, c.end);
       if (out.some(r => r.ds === ds && r.c === c)) continue;
-      let status = null, arrived = null, late = 0;
+      let status = null, arrived = null, late = 0; const seen = [];
       for (const m of CHECKS) {
         const T = new Date(st.getTime() + m * 60000);
         if (T > now) { status = m === 0 ? "soon" : "checking"; break; }
-        const sAt = stateAt(c.building, T, ev, places);
-        if (sAt && sAt.inside) { status = m === 0 ? "ok" : "late"; late = m; arrived = sAt.since; break; }
+        const r = stateAt(c.building, T, ev, places); seen.push(r.s);
+        if (r.s === "in") { status = m === 0 ? "ok" : "late"; late = m; arrived = r.since; break; }
       }
-      if (!status) {
-        const near = ev.some(e => Math.abs(e.t - st) <= 45 * 60000);
-        status = near ? "miss" : "none";
-      }
+      // never seen inside: a no-show only if his phone was reporting at the last check; otherwise unknown
+      if (!status) status = seen[seen.length - 1] === "out" ? "miss" : "none";
+      else if (status === "checking" && seen.length && seen.every(x => x === "unknown")) status = "silent";
       out.push({ ds, st, en, c, status, arrived, late });
     }
   }
@@ -196,13 +203,13 @@ function rangeStart() {
 function render() {
   const cut = rangeStart(), rows = ALL.filter(r => r.st >= cut);
   const B = { ok: '<span class="b ok">✓ On time</span>', late: r => `<span class="b late">◔ ${r.late}+ min late</span>`, miss: '<span class="b miss">✗ No-show</span>',
-    none: '<span class="b none">? No phone data</span>', soon: '<span class="b soon">… Not yet</span>', checking: '<span class="b soon">… Checking</span>' };
+    none: '<span class="b none">? Unknown (phone silent)</span>', silent: '<span class="b none">… Phone silent</span>', soon: '<span class="b soon">… Not yet</span>', checking: '<span class="b soon">… Checking</span>' };
   const courses = [...new Set([...CLASSES.map(c => c.course), ...ALL.map(r => r.c.course)])].sort();
   $("#tiles").innerHTML = courses.length ? courses.map(cn => {
-    const r = rows.filter(x => x.c.course === cn && !["soon", "checking"].includes(x.status));
+    const r = rows.filter(x => x.c.course === cn && !["soon", "checking", "silent"].includes(x.status));
     const cnt = k => r.filter(x => x.status === k).length, ok = cnt("ok"), late = cnt("late"), miss = cnt("miss"), none = cnt("none"), n = ok + late + miss;
     return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? (ok + late) + "/" + n : "–"}</div>
-    <div class="muted one">${n ? `${ok} on time · ${late} late · ${miss} no-show` : (rows.some(x => x.c.course === cn) ? "no classes with phone data" : "no class in this range")}</div>${none ? `<div class="muted one">${none} with no phone data</div>` : ""}
+    <div class="muted one">${n ? `${ok} on time · ${late} late · ${miss} no-show` : (rows.some(x => x.c.course === cn) ? "phone silent for every class" : "no class in this range")}</div>${none ? `<div class="muted one">${none} unknown (phone silent)</div>` : ""}
     <div class="meter" role="img" aria-label="${ok} on time, ${late} late, ${miss} no-show"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * late / n : 0}%;background:var(--late-fg)"></i><i style="width:${n ? 100 * miss / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
     : `<div class="muted">No class check-ins yet.</div>`;
   $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td class="d">${fmtWd(r.st)}<br>${fmtMd(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
