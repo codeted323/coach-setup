@@ -81,6 +81,7 @@ From his OwnTracks reports. Checked at the minute class starts, then 5, 10 and 3
 <b>On time</b>: his phone was inside the building at the start. <b>Late</b>: first seen inside at the 5, 10 or 30 minute check.<br>
 <b>No-show</b>: his phone was reporting, but not from the building, through the 30 minute check.<br>
 <b>Unknown</b>: his phone sent nothing for 20+ minutes around the check (location off, phone off or dead, or OwnTracks closed), so we can't tell. Unknowns don't count against him in the scores.<br>
+<b>📅 Appointments</b>: calendar events whose location (or title) names one of his class buildings get the same checks.<br>
 <b>📵 Phone silent</b> under a class: his phone stopped reporting for 20+ minutes during it, with the likely reason when it can be told (battery died, no signal, or location off / app closed / phone off).</div></div>
 <div class="tiles" id="tiles"></div>
 <div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Journal</b></div>
@@ -176,7 +177,7 @@ function silentGap(ev, a, b) {
   return best;
 }
 const TRACK_FROM = "2026-11-17"; // Monday Nov 16 was before Move mode was on, so it's left out // minutes after class starts
-function build(cfg, visits, pings) {
+function build(cfg, visits, pings, appts) {
   const classes = ((cfg.study || {}).classes || []).filter(c => c.building);
   const places = cfg.places || {};
   const off = (cfg.study || {}).no_class_dates || [];
@@ -190,9 +191,14 @@ function build(cfg, visits, pings) {
   for (let d = new Date(ev[0].t.getTime() - 86400000); d <= now; d.setDate(d.getDate() + 1)) {
     const ds = ymd(d); if (ds < firstDay || isOff(ds)) continue;
     const dow = DOW[new Date(at(ds, "12:00").toLocaleString("en-US", { timeZone: TZ })).getDay()];
-    for (const c of classes) {
-      if (!c.days.includes(dow)) continue;
-      const st = at(ds, c.start), en = at(ds, c.end);
+    // classes, plus calendar appointments at a known building (one that lines up with a class is the class itself)
+    const todays = classes.filter(c => c.days.includes(dow)).map(c => ({ c, st: at(ds, c.start), en: at(ds, c.end) }));
+    for (const a of appts || []) {
+      const st = new Date(a.start); if (ymd(st) !== ds) continue;
+      if (todays.some(x => x.c.building === a.building && Math.abs(x.st - st) <= 10 * 60000)) continue;
+      todays.push({ c: { course: "📅 " + a.title, building: a.building, room: "", appt: true }, st, en: new Date(a.end) });
+    }
+    for (const { c, st, en } of todays) {
       if (out.some(r => r.ds === ds && r.c === c)) continue;
       let status = null, arrived = null, late = 0; const seen = [];
       for (const m of CHECKS) {
@@ -220,12 +226,13 @@ function render() {
   const cut = rangeStart(), rows = ALL.filter(r => r.st >= cut);
   const B = { ok: '<span class="b ok">✓ On time</span>', late: r => `<span class="b late">◔ ${r.late}+ min late</span>`, miss: '<span class="b miss">✗ No-show</span>',
     none: '<span class="b none">? Unknown (phone silent)</span>', silent: '<span class="b none">… Phone silent</span>', soon: '<span class="b soon">… Not yet</span>', checking: '<span class="b soon">… Checking</span>' };
-  const courses = [...new Set([...CLASSES.map(c => c.course), ...ALL.map(r => r.c.course)])].sort();
+  const courses = [...new Set([...CLASSES.map(c => c.course), ...ALL.filter(r => !r.c.appt).map(r => r.c.course)])].sort();
+  if (ALL.some(r => r.c.appt)) courses.push("📅 Appointments");
   $("#tiles").innerHTML = courses.length ? courses.map(cn => {
-    const r = rows.filter(x => x.c.course === cn && !["soon", "checking", "silent"].includes(x.status));
+    const r = rows.filter(x => (cn === "📅 Appointments" ? x.c.appt : x.c.course === cn) && !["soon", "checking", "silent"].includes(x.status));
     const cnt = k => r.filter(x => x.status === k).length, ok = cnt("ok"), late = cnt("late"), miss = cnt("miss"), none = cnt("none"), n = ok + late + miss;
     return `<div class="tile"><div class="muted">${esc(cn)}</div><div class="big">${n ? (ok + late) + "/" + n : "–"}</div>
-    <div class="muted one">${n ? `${ok} on time · ${late} late · ${miss} no-show` : (rows.some(x => x.c.course === cn) ? "phone silent for every class" : "no class in this range")}</div>${none ? `<div class="muted one">${none} unknown (phone silent)</div>` : ""}
+    <div class="muted one">${n ? `${ok} on time · ${late} late · ${miss} no-show` : (rows.some(x => cn === "📅 Appointments" ? x.c.appt : x.c.course === cn) ? "phone silent for every class" : "no class in this range")}</div>${none ? `<div class="muted one">${none} unknown (phone silent)</div>` : ""}
     <div class="meter" role="img" aria-label="${ok} on time, ${late} late, ${miss} no-show"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * late / n : 0}%;background:var(--late-fg)"></i><i style="width:${n ? 100 * miss / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
     : `<div class="muted">No class check-ins yet.</div>`;
   $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td class="d">${fmtWd(r.st)}<br>${fmtMd(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
@@ -236,7 +243,7 @@ async function start() {
   if (!conn.token) return showLogin();
   try {
     const [cfg, w] = await Promise.all([gh("config.json"), bot("/web/visits")]);
-    ALL = build(cfg, w.visits || [], w.pings || []);
+    ALL = build(cfg, w.visits || [], w.pings || [], w.appts || []);
     CLASSES = ((cfg.study || {}).classes || []).filter(c => c.building);
     const last = w.otLast && w.otLast.at, hrs = last ? (Date.now() - new Date(last)) / 3600000 : 1e9;
     const upd = "Updated " + new Date().toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
