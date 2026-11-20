@@ -80,7 +80,8 @@ th{font-size:12px;color:var(--ink2);font-weight:600}
 From his OwnTracks reports. Checked at the minute class starts, then 5, 10 and 30 minutes after.<br>
 <b>On time</b>: his phone was inside the building at the start. <b>Late</b>: first seen inside at the 5, 10 or 30 minute check.<br>
 <b>No-show</b>: his phone was reporting, but not from the building, through the 30 minute check.<br>
-<b>Unknown</b>: his phone sent nothing for 20+ minutes around the check (location off, phone off or dead, or OwnTracks closed), so we can't tell. Unknowns don't count against him in the scores.</div></div>
+<b>Unknown</b>: his phone sent nothing for 20+ minutes around the check (location off, phone off or dead, or OwnTracks closed), so we can't tell. Unknowns don't count against him in the scores.<br>
+<b>📵 Phone silent</b> under a class: his phone stopped reporting for 20+ minutes during it, with the likely reason when it can be told (battery died, no signal, or location off / app closed / phone off).</div></div>
 <div class="tiles" id="tiles"></div>
 <div class="panel"><div class="row" style="margin:0 0 8px"><b style="flex:1">Journal</b></div>
 <div style="overflow-x:auto"><table class="grid"><thead><tr><th>Day</th><th>Class</th><th>Time</th><th>Where</th><th class="c">There?</th><th>Since</th></tr></thead><tbody id="rows"></tbody></table></div></div>
@@ -159,6 +160,21 @@ function stateAt(B, T, ev, places) {
 function dist(a, b) { const R = 6371000, r = x => x * Math.PI / 180, dLa = r(b.lat - a.lat), dLo = r(b.lon - a.lon);
   return 2 * R * Math.asin(Math.sqrt(Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLo / 2) ** 2)); }
 const CHECKS = [0, 5, 10, 30];
+// Longest stretch (20+ min) with no reports between a and b, and the likely reason.
+function silentGap(ev, a, b) {
+  if (b <= a) return null;
+  const ts = ev.filter(e => e.t >= new Date(a - FRESH) && e.t <= b).map(e => e.t);
+  let best = null, prev = ts.length && ts[0] <= a ? ts.filter(t => t <= a).pop() : a;
+  for (const t of [...ts.filter(t => t > a), b]) { if (t - prev >= FRESH && (!best || t - prev > best.to - best.from)) best = { from: prev, to: t }; prev = t; }
+  if (!best) return null;
+  const before = ev.filter(e => e.k === "ping" && e.t <= best.from).pop();
+  const inGap = ev.filter(e => e.k === "ping" && e.t > best.from && e.t < best.to);
+  best.why = inGap.some(e => e.rx && new Date(e.rx) - e.t > 10 * 60000) ? "no signal (reports came in late)"
+    : before && before.batt != null && before.batt <= 5 && before.bs !== 2 ? `battery likely died (${before.batt}%)`
+    : before && before.batt == null ? "" : "location off, app closed or phone off";
+  best.ongoing = +best.to === +b && b >= new Date(Date.now() - 60000);
+  return best;
+}
 const TRACK_FROM = "2026-11-17"; // Monday Nov 16 was before Move mode was on, so it's left out // minutes after class starts
 function build(cfg, visits, pings) {
   const classes = ((cfg.study || {}).classes || []).filter(c => c.building);
@@ -188,7 +204,7 @@ function build(cfg, visits, pings) {
       // never seen inside: a no-show only if his phone was reporting at the last check; otherwise unknown
       if (!status) status = seen[seen.length - 1] === "out" ? "miss" : "none";
       else if (status === "checking" && seen.length && seen.every(x => x === "unknown")) status = "silent";
-      out.push({ ds, st, en, c, status, arrived, late });
+      out.push({ ds, st, en, c, status, arrived, late, gap: silentGap(ev, new Date(st - 15 * 60000), en < now ? en : now) });
     }
   }
   return out.sort((a, b) => b.st - a.st);
@@ -213,7 +229,7 @@ function render() {
     <div class="meter" role="img" aria-label="${ok} on time, ${late} late, ${miss} no-show"><i style="width:${n ? 100 * ok / n : 0}%;background:var(--ok-fg)"></i><i style="width:${n ? 100 * late / n : 0}%;background:var(--late-fg)"></i><i style="width:${n ? 100 * miss / n : 0}%;background:var(--miss-fg)"></i></div></div>`; }).join("")
     : `<div class="muted">No class check-ins yet.</div>`;
   $("#rows").innerHTML = rows.length ? rows.map(r => `<tr><td class="d">${fmtWd(r.st)}<br>${fmtMd(r.st)}</td><td><b>${esc(r.c.course)}</b></td><td>${fmtT(r.st)}</td><td>${esc(r.c.building)}${r.c.room ? " " + esc(r.c.room) : ""}</td>
-    <td class="c">${typeof B[r.status] === "function" ? B[r.status](r) : B[r.status]}</td><td>${r.arrived ? fmtT(r.arrived) : ""}</td></tr>`).join("")
+    <td class="c">${typeof B[r.status] === "function" ? B[r.status](r) : B[r.status]}${r.gap ? `<div class="muted" style="margin-top:4px;white-space:normal">📵 phone silent ${fmtT(r.gap.from)}–${r.gap.ongoing ? "now" : fmtT(r.gap.to)}${r.gap.why ? ": " + r.gap.why : ""}</div>` : ""}</td><td>${r.arrived ? fmtT(r.arrived) : ""}</td></tr>`).join("")
     : `<tr><td colspan="6" class="muted">No classes in this range yet.</td></tr>`;
 }
 async function start() {
@@ -224,7 +240,8 @@ async function start() {
     CLASSES = ((cfg.study || {}).classes || []).filter(c => c.building);
     const last = w.otLast && w.otLast.at, hrs = last ? (Date.now() - new Date(last)) / 3600000 : 1e9;
     const upd = "Updated " + new Date().toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
-    $("#asof").innerHTML = `${upd} (${last ? "last reached " + ago(last) : "phone hasn't reported yet"})` + (hrs >= 24 ? ` <span style="color:var(--late-fg)">⚠</span>` : "");
+    const lp = (w.pings || []).slice(-1)[0], extra = lp ? [lp.batt != null ? lp.batt + "%" + (lp.bs === 2 ? "⚡" : "") : "", lp.conn === "w" ? "Wi-Fi" : lp.conn === "m" ? "cell" : ""].filter(Boolean).join(" · ") : "";
+    $("#asof").innerHTML = `${upd} (${last ? "last reached " + ago(last) + (extra ? " · " + extra : "") : "phone hasn't reported yet"})` + (hrs >= 24 ? ` <span style="color:var(--late-fg)">⚠</span>` : "");
     $("#asof").title = $("#asof").textContent;
     const from = at(TRACK_FROM, "00:00");
     const log = (w.visits || []).filter(x => new Date(x.at) >= from).slice(-40).reverse();
