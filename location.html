@@ -192,7 +192,10 @@ function build(cfg, visits, pings, appts) {
     const ds = ymd(d); if (ds < firstDay || isOff(ds)) continue;
     const dow = DOW[new Date(at(ds, "12:00").toLocaleString("en-US", { timeZone: TZ })).getDay()];
     // classes, plus calendar appointments at a known building (one that lines up with a class is the class itself)
-    const todays = classes.filter(c => c.days.includes(dow)).map(c => ({ c, st: at(ds, c.start), en: at(ds, c.end) }));
+    const sem = cfg.semester || {};
+    if (sem.start && (ds < sem.start || ds > (sem.finals_end || sem.classes_end || "9999"))) continue;
+    const inTerm = !sem.start || ds <= (sem.classes_end || "9999");
+    const todays = classes.filter(c => inTerm && c.days.includes(dow)).map(c => ({ c, st: at(ds, c.start), en: at(ds, c.end) }));
     for (const a of appts || []) {
       const st = new Date(a.start); if (ymd(st) !== ds) continue;
       if (todays.some(x => x.c.building === a.building && Math.abs(x.st - st) <= 10 * 60000)) continue;
